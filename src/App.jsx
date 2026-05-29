@@ -439,7 +439,6 @@ const CSS = `
     margin: 10mm;
   }
 }
-```
   /* CHART */
   .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 100px; padding: 8px 0; }
   .bar { flex: 1; border-radius: 4px 4px 0 0; transition: all 0.3s; cursor: pointer; position: relative; min-width: 20px; }
