@@ -383,11 +383,18 @@ const CSS = `
   width: 320px;
 }
 
-.inv-total-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
+.inv-total-row td {
+  padding: 6px 10px;
   font-size: 14px;
+  border-bottom: none;
+}
+
+.inv-total-row.grand td {
+  border-top: 2px solid #222;
+  padding-top: 12px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #c48b00;
 }
 
 .inv-grand-total {
@@ -420,13 +427,29 @@ const CSS = `
   .sidebar,
   .topbar,
   .btn,
-  .modal-header,
-  .form-section,
-  .invoice-generator-form {
+  .section-header,
+  .alert,
+  .tabs,
+  .search-wrap {
     display: none !important;
   }
 
-  .invoice-paper {
+  /* Hide all cards except the invoice paper when printing */
+  .content > * {
+    display: none !important;
+  }
+
+  /* Show only the print-target elements */
+  .invoice-paper,
+  #ticket-print-area {
+    display: block !important;
+  }
+
+  #ticket-print-area {
+    display: block !important;
+  }
+
+  .invoice-paper, .ticket-paper {
     width: 100%;
     min-height: auto;
     padding: 10mm;
@@ -439,7 +462,48 @@ const CSS = `
     margin: 10mm;
   }
 }
-  /* CHART */
+/* TICKET PAPER */
+.ticket-paper {
+  width: 210mm;
+  margin: auto;
+  background: #ffffff;
+  color: #1a1a1a;
+  font-family: Arial, sans-serif;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ticket-paper .tkt-header {
+  background: linear-gradient(135deg, #c48b00, #f0a500);
+  color: #fff;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ticket-paper .tkt-company { font-size: 18px; font-weight: bold; }
+.ticket-paper .tkt-sub { font-size: 11px; opacity: 0.85; }
+.ticket-paper .tkt-no { font-size: 22px; font-weight: bold; text-align: right; }
+.ticket-paper .tkt-body { padding: 20px 24px; }
+.ticket-paper .tkt-row { display: flex; gap: 0; border-bottom: 1px dashed #e0e0e0; }
+.ticket-paper .tkt-cell { flex: 1; padding: 10px 14px; }
+.ticket-paper .tkt-cell-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+.ticket-paper .tkt-cell-val { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+.ticket-paper .tkt-route { background: #fffbf0; border-left: 4px solid #f0a500; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+.ticket-paper .tkt-airport { font-size: 28px; font-weight: bold; color: #c48b00; }
+.ticket-paper .tkt-city { font-size: 11px; color: #666; }
+.ticket-paper .tkt-arrow { font-size: 22px; color: #c48b00; flex-shrink: 0; }
+.ticket-paper .tkt-footer { background: #f9f9f9; padding: 12px 24px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #eee; }
+.ticket-paper .tkt-amount { background: #fff8e8; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #f0a500; }
+.ticket-paper .tkt-amount-label { font-size: 12px; font-weight: 700; color: #888; }
+.ticket-paper .tkt-amount-val { font-size: 22px; font-weight: bold; color: #c48b00; }
+
+/* FORM VALIDATION */
+.form-input.error, .form-select.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(248,81,73,0.1); }
+.form-error { font-size: 11px; color: var(--red); margin-top: 2px; }
+.form-input[type="number"] { font-family: 'JetBrains Mono', monospace; }
+
+/* CHART */
   .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 100px; padding: 8px 0; }
   .bar { flex: 1; border-radius: 4px 4px 0 0; transition: all 0.3s; cursor: pointer; position: relative; min-width: 20px; }
   .bar:hover { opacity: 0.8; }
@@ -704,8 +768,23 @@ function CargoRegister({ data, setData, toast }) {
     });
   };
 
+  const [errors, setErrors] = useState({});
+
+  const validate = () => {
+    const e = {};
+    if (!form.senderName.trim()) e.senderName = "Required";
+    if (!form.receiverName.trim()) e.receiverName = "Required";
+    if (!form.description) e.description = "Required";
+    if (form.unitPrice && isNaN(Number(form.unitPrice))) e.unitPrice = "Must be a number";
+    if (form.qty && isNaN(Number(form.qty))) e.qty = "Must be a number";
+    if (form.senderContact && !/^\+?[\d\s\-()]{6,}$/.test(form.senderContact)) e.senderContact = "Invalid phone";
+    if (form.receiverContact && !/^\+?[\d\s\-()]{6,}$/.test(form.receiverContact)) e.receiverContact = "Invalid phone";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const submit = async () => {
-    if (!form.senderName || !form.receiverName || !form.description) { toast("Fill in required fields", "error"); return; }
+    if (!validate()) { toast("Please fix form errors", "error"); return; }
     let updated;
     if (editing) {
       updated = data.map(r => r.id === editing ? { ...form, id: editing } : r);
@@ -717,7 +796,7 @@ function CargoRegister({ data, setData, toast }) {
     }
     setData(updated);
     await saveData(KEYS.cargo, updated);
-    setShowForm(false); setEditing(null); setForm(emptyForm);
+    setShowForm(false); setEditing(null); setForm(emptyForm); setErrors({});
   };
 
   const del = async (id) => {
@@ -817,51 +896,58 @@ function CargoRegister({ data, setData, toast }) {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Description / Item *</label>
-                  <select className="form-select" value={form.description} onChange={e => set("description", e.target.value)}>
+                  <select className={`form-select${errors.description ? " error" : ""}`} value={form.description} onChange={e => set("description", e.target.value)}>
                     <option value="">Select type…</option>
                     {["Clothes", "M-items", "Starlink", "P-solar", "S-battery", 
                       "Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics", "Food Items", "Documents", "Other"].map(o => <option key={o}>{o}</option>)}
                   </select>
+                  {errors.description && <span className="form-error">{errors.description}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Unit / kg</label>
-                  <input className="form-input" placeholder="e.g. kg" value={form.unitKg} onChange={e => set("unitKg", e.target.value)} />
+                  <input type="text" className="form-input" placeholder="e.g. kg, pcs" value={form.unitKg} onChange={e => set("unitKg", e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Unit Price (SSP)</label>
-                  <input type="number" className="form-input" value={form.unitPrice} onChange={e => set("unitPrice", e.target.value)} />
+                  <input type="number" min="0" step="any" className={`form-input${errors.unitPrice ? " error" : ""}`} value={form.unitPrice} onChange={e => set("unitPrice", e.target.value)} />
+                  {errors.unitPrice && <span className="form-error">{errors.unitPrice}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Qty</label>
-                  <input type="number" className="form-input" value={form.qty} onChange={e => set("qty", e.target.value)} />
+                  <input type="number" min="0" step="any" className={`form-input${errors.qty ? " error" : ""}`} value={form.qty} onChange={e => set("qty", e.target.value)} />
+                  {errors.qty && <span className="form-error">{errors.qty}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Spec</label>
-                  <input className="form-input" placeholder="e.g. kg, pcs" value={form.spec} onChange={e => set("spec", e.target.value)} />
+                  <input type="text" className="form-input" placeholder="e.g. kg, pcs" value={form.spec} onChange={e => set("spec", e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Sender Name *</label>
-                  <input className="form-input" value={form.senderName} onChange={e => set("senderName", e.target.value)} />
+                  <input type="text" className={`form-input${errors.senderName ? " error" : ""}`} value={form.senderName} onChange={e => set("senderName", e.target.value)} />
+                  {errors.senderName && <span className="form-error">{errors.senderName}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Sender Location</label>
-                  <input className="form-input" value={form.senderLocation} onChange={e => set("senderLocation", e.target.value)} />
+                  <input type="text" className="form-input" value={form.senderLocation} onChange={e => set("senderLocation", e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Sender Contact</label>
-                  <input className="form-input" value={form.senderContact} onChange={e => set("senderContact", e.target.value)} />
+                  <input type="tel" className={`form-input${errors.senderContact ? " error" : ""}`} value={form.senderContact} onChange={e => set("senderContact", e.target.value)} />
+                  {errors.senderContact && <span className="form-error">{errors.senderContact}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Receiver Name *</label>
-                  <input className="form-input" value={form.receiverName} onChange={e => set("receiverName", e.target.value)} />
+                  <input type="text" className={`form-input${errors.receiverName ? " error" : ""}`} value={form.receiverName} onChange={e => set("receiverName", e.target.value)} />
+                  {errors.receiverName && <span className="form-error">{errors.receiverName}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Receiver Location</label>
-                  <input className="form-input" value={form.receiverLocation} onChange={e => set("receiverLocation", e.target.value)} />
+                  <input type="text" className="form-input" value={form.receiverLocation} onChange={e => set("receiverLocation", e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Receiver Contact</label>
-                  <input className="form-input" value={form.receiverContact} onChange={e => set("receiverContact", e.target.value)} />
+                  <input type="tel" className={`form-input${errors.receiverContact ? " error" : ""}`} value={form.receiverContact} onChange={e => set("receiverContact", e.target.value)} />
+                  {errors.receiverContact && <span className="form-error">{errors.receiverContact}</span>}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Payment Method</label>
@@ -901,9 +987,22 @@ function Ticketing({ data, setData, toast }) {
   const emptyForm = { ticketNo: nextTicket, date: today(), passengerName: "", phone: "", fees: "", weightKg: "", checkInTime: "", departureTime: "", arrivalTime: "", from: "", to: "", flightNo: "", paymentStatus: "Paid", remarks: "" };
   const [form, setForm] = useState(emptyForm);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [errors, setErrors] = useState({});
+
+  const validateTicket = () => {
+    const e = {};
+    if (!form.passengerName.trim()) e.passengerName = "Required";
+    if (!form.from.trim()) e.from = "Required";
+    if (!form.to.trim()) e.to = "Required";
+    if (form.fees && isNaN(Number(form.fees))) e.fees = "Must be a number";
+    if (form.weightKg && isNaN(Number(form.weightKg))) e.weightKg = "Must be a number";
+    if (form.phone && !/^\+?[\d\s\-()]{6,}$/.test(form.phone)) e.phone = "Invalid phone";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const submit = async () => {
-    if (!form.passengerName || !form.from || !form.to) { toast("Fill required fields", "error"); return; }
+    if (!validateTicket()) { toast("Please fix form errors", "error"); return; }
     let updated;
     if (editing) {
       updated = data.map(r => r.id === editing ? { ...form, id: editing } : r);
@@ -916,7 +1015,9 @@ function Ticketing({ data, setData, toast }) {
     setShowForm(false); setEditing(null); setForm({ ...emptyForm, ticketNo: nextTicket + 1 });
   };
   const del = async (id) => { const u = data.filter(r => r.id !== id); setData(u); await saveData(KEYS.tickets, u); toast("Deleted", "error"); };
-  const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); };
+  const [printTkt, setPrintTkt] = useState(null);
+  const printTicket = (r) => { setPrintTkt(r); setTimeout(() => window.print(), 300); };
+  const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); setErrors({}); };
   const filtered = data.filter(r => (r.passengerName || "").toLowerCase().includes(search.toLowerCase()) || (r.ticketNo + "").includes(search) || (r.from || "").toLowerCase().includes(search.toLowerCase()) || (r.to || "").toLowerCase().includes(search.toLowerCase()));
   const totalFees = data.reduce((s, r) => s + Number(r.fees || 0), 0);
 
@@ -964,6 +1065,7 @@ function Ticketing({ data, setData, toast }) {
                     <td style={{ fontSize: 12, color: "var(--muted)" }}>{r.weightKg ? `${r.weightKg} kg` : "—"}</td>
                     <td><StatusBadge status={r.paymentStatus} /></td>
                     <td><div style={{ display: "flex", gap: 4 }}>
+                      <button className="btn btn-ghost btn-sm" title="Print Ticket" onClick={() => printTicket(r)}><Icon name="print" size={13} /></button>
                       <button className="btn btn-ghost btn-sm" onClick={() => openEdit(r)}><Icon name="edit" size={13} /></button>
                       <button className="btn btn-danger btn-sm" onClick={() => del(r.id)}><Icon name="trash" size={13} /></button>
                     </div></td>
@@ -993,20 +1095,21 @@ function Ticketing({ data, setData, toast }) {
                 {[
                   { k: "ticketNo", l: "Ticket No.", type: "number" },
                   { k: "date", l: "Date", type: "date" },
-                  { k: "passengerName", l: "Passenger Name *" },
-                  { k: "phone", l: "Phone" },
+                  { k: "passengerName", l: "Passenger Name *", type: "text" },
+                  { k: "phone", l: "Phone", type: "tel" },
                   { k: "fees", l: "Fees (SSP)", type: "number" },
                   { k: "weightKg", l: "Weight (kg)", type: "number" },
-                  { k: "from", l: "From *" },
-                  { k: "to", l: "To *" },
-                  { k: "flightNo", l: "Flight No." },
-                  { k: "checkInTime", l: "Check-in Time" },
-                  { k: "departureTime", l: "Departure Time" },
-                  { k: "arrivalTime", l: "Arrival Time" },
+                  { k: "from", l: "From *", type: "text" },
+                  { k: "to", l: "To *", type: "text" },
+                  { k: "flightNo", l: "Flight No.", type: "text" },
+                  { k: "checkInTime", l: "Check-in Time", type: "time" },
+                  { k: "departureTime", l: "Departure Time", type: "time" },
+                  { k: "arrivalTime", l: "Arrival Time", type: "time" },
                 ].map(({ k, l, type }) => (
                   <div className="form-group" key={k}>
                     <label className="form-label">{l}</label>
-                    <input type={type || "text"} className="form-input" value={form[k] || ""} onChange={e => set(k, e.target.value)} />
+                    <input type={type} className={`form-input${errors[k] ? " error" : ""}`} value={form[k] || ""} onChange={e => set(k, e.target.value)} />
+                    {errors[k] && <span className="form-error">{errors[k]}</span>}
                   </div>
                 ))}
                 <div className="form-group">
@@ -1017,13 +1120,68 @@ function Ticketing({ data, setData, toast }) {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Remarks</label>
-                  <input className="form-input" value={form.remarks || ""} onChange={e => set("remarks", e.target.value)} />
+                  <input type="text" className="form-input" value={form.remarks || ""} onChange={e => set("remarks", e.target.value)} />
                 </div>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
               <button className="btn btn-primary" onClick={submit}><Icon name="check" size={15} />{editing ? "Update" : "Issue Ticket"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRINTABLE TICKET — hidden on screen, visible on print */}
+      {printTkt && (
+        <div style={{ display: "none" }} className="print-target" id="ticket-print-area">
+          <div className="ticket-paper">
+            <div className="tkt-header">
+              <div>
+                <div className="tkt-company">PER WAANI</div>
+                <div className="tkt-sub">General Trading & Investment Co. Ltd · Juba Airport Road, South Sudan</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 11, opacity: 0.8 }}>BOARDING PASS / TICKET</div>
+                <div className="tkt-no">#{printTkt.ticketNo}</div>
+              </div>
+            </div>
+            <div className="tkt-route">
+              <div>
+                <div className="tkt-airport">{printTkt.from || "—"}</div>
+                <div className="tkt-city">Origin</div>
+              </div>
+              <div className="tkt-arrow">✈ ──────</div>
+              <div>
+                <div className="tkt-airport">{printTkt.to || "—"}</div>
+                <div className="tkt-city">Destination</div>
+              </div>
+            </div>
+            <div className="tkt-body">
+              <div className="tkt-row">
+                <div className="tkt-cell"><div className="tkt-cell-label">Passenger</div><div className="tkt-cell-val">{printTkt.passengerName || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Phone</div><div className="tkt-cell-val">{printTkt.phone || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Date</div><div className="tkt-cell-val">{printTkt.date || "—"}</div></div>
+              </div>
+              <div className="tkt-row">
+                <div className="tkt-cell"><div className="tkt-cell-label">Flight No.</div><div className="tkt-cell-val">{printTkt.flightNo || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Check-in</div><div className="tkt-cell-val">{printTkt.checkInTime || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Departure</div><div className="tkt-cell-val">{printTkt.departureTime || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Arrival</div><div className="tkt-cell-val">{printTkt.arrivalTime || "—"}</div></div>
+              </div>
+              <div className="tkt-row">
+                <div className="tkt-cell"><div className="tkt-cell-label">Weight (kg)</div><div className="tkt-cell-val">{printTkt.weightKg || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Status</div><div className="tkt-cell-val">{printTkt.paymentStatus || "—"}</div></div>
+                <div className="tkt-cell"><div className="tkt-cell-label">Remarks</div><div className="tkt-cell-val">{printTkt.remarks || "—"}</div></div>
+              </div>
+            </div>
+            <div className="tkt-amount">
+              <div><div className="tkt-amount-label">SERVICE FEE</div></div>
+              <div className="tkt-amount-val">SSP {fmt(printTkt.fees)}</div>
+            </div>
+            <div className="tkt-footer">
+              Per Waani General Trading & Investment Co. Ltd · +211 (0) 920 000 149 · perwaani2023@gmail.com<br />
+              This ticket is your official travel document — please retain for your records.
             </div>
           </div>
         </div>
@@ -1045,8 +1203,23 @@ function Bookings({ data, setData, toast }) {
     return nf;
   });
 
+  const [errors, setErrors] = useState({});
+
+  const validateBooking = () => {
+    const e = {};
+    if (!form.passengerName.trim()) e.passengerName = "Required";
+    if (!form.from.trim()) e.from = "Required";
+    if (!form.to.trim()) e.to = "Required";
+    if (form.fare && isNaN(Number(form.fare))) e.fare = "Must be a number";
+    if (form.taxes && isNaN(Number(form.taxes))) e.taxes = "Must be a number";
+    if (form.luggageKg && isNaN(Number(form.luggageKg))) e.luggageKg = "Must be a number";
+    if (form.phone && !/^\+?[\d\s\-()]{6,}$/.test(form.phone)) e.phone = "Invalid phone";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const submit = async () => {
-    if (!form.passengerName || !form.from || !form.to) { toast("Fill required fields", "error"); return; }
+    if (!validateBooking()) { toast("Please fix form errors", "error"); return; }
     let updated;
     if (editing) {
       updated = data.map(r => r.id === editing ? { ...form, id: editing } : r);
@@ -1057,10 +1230,10 @@ function Bookings({ data, setData, toast }) {
       toast("Booking confirmed ✓", "success");
     }
     setData(updated); await saveData(KEYS.bookings, updated);
-    setShowForm(false); setEditing(null); setForm(emptyForm);
+    setShowForm(false); setEditing(null); setForm(emptyForm); setErrors({});
   };
   const del = async (id) => { const u = data.filter(r => r.id !== id); setData(u); await saveData(KEYS.bookings, u); toast("Deleted", "error"); };
-  const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); };
+  const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); setErrors({}); };
   const filtered = data.filter(r => (r.passengerName || "").toLowerCase().includes(search.toLowerCase()) || (r.bookingId || "").includes(search) || (r.from || "").toLowerCase().includes(search.toLowerCase()));
   const totalRev = data.reduce((s, r) => s + Number(r.total || 0), 0);
 
@@ -1135,12 +1308,12 @@ function Bookings({ data, setData, toast }) {
             <div className="modal-body">
               <div className="form-grid">
                 <div className="form-group"><label className="form-label">Booking Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e => set("bookingDate", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Passenger Name *</label><input className="form-input" value={form.passengerName || ""} onChange={e => set("passengerName", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Phone</label><input className="form-input" value={form.phone || ""} onChange={e => set("phone", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">ID / Passport</label><input className="form-input" value={form.idPassport || ""} onChange={e => set("idPassport", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">From *</label><input className="form-input" value={form.from || ""} onChange={e => set("from", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">To *</label><input className="form-input" value={form.to || ""} onChange={e => set("to", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Flight No.</label><input className="form-input" value={form.flightNo || ""} onChange={e => set("flightNo", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Passenger Name *</label><input type="text" className={`form-input${errors.passengerName ? " error" : ""}`} value={form.passengerName || ""} onChange={e => set("passengerName", e.target.value)} />{errors.passengerName && <span className="form-error">{errors.passengerName}</span>}</div>
+                <div className="form-group"><label className="form-label">Phone</label><input type="tel" className={`form-input${errors.phone ? " error" : ""}`} value={form.phone || ""} onChange={e => set("phone", e.target.value)} />{errors.phone && <span className="form-error">{errors.phone}</span>}</div>
+                <div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport || ""} onChange={e => set("idPassport", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from ? " error" : ""}`} value={form.from || ""} onChange={e => set("from", e.target.value)} />{errors.from && <span className="form-error">{errors.from}</span>}</div>
+                <div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to ? " error" : ""}`} value={form.to || ""} onChange={e => set("to", e.target.value)} />{errors.to && <span className="form-error">{errors.to}</span>}</div>
+                <div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo || ""} onChange={e => set("flightNo", e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate || ""} onChange={e => set("departureDate", e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime || ""} onChange={e => set("departureTime", e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Seat Class</label>
@@ -1148,9 +1321,9 @@ function Bookings({ data, setData, toast }) {
                     {["Economy", "Business", "First Class"].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
-                <div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg || ""} onChange={e => set("luggageKg", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Fare (SSP)</label><input type="number" className="form-input" value={form.fare || ""} onChange={e => set("fare", e.target.value)} /></div>
-                <div className="form-group"><label className="form-label">Taxes (SSP)</label><input type="number" className="form-input" value={form.taxes || ""} onChange={e => set("taxes", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" min="0" step="any" className={`form-input${errors.luggageKg ? " error" : ""}`} value={form.luggageKg || ""} onChange={e => set("luggageKg", e.target.value)} />{errors.luggageKg && <span className="form-error">{errors.luggageKg}</span>}</div>
+                <div className="form-group"><label className="form-label">Fare (SSP)</label><input type="number" min="0" step="any" className={`form-input${errors.fare ? " error" : ""}`} value={form.fare || ""} onChange={e => set("fare", e.target.value)} />{errors.fare && <span className="form-error">{errors.fare}</span>}</div>
+                <div className="form-group"><label className="form-label">Taxes (SSP)</label><input type="number" min="0" step="any" className={`form-input${errors.taxes ? " error" : ""}`} value={form.taxes || ""} onChange={e => set("taxes", e.target.value)} />{errors.taxes && <span className="form-error">{errors.taxes}</span>}</div>
                 <div className="form-group"><label className="form-label">Total (SSP) <span style={{ color: "var(--green)", fontSize: 10 }}>Auto</span></label>
                   <input type="number" className="form-input" value={form.total || ""} readOnly style={{ borderColor: "var(--green)" }} />
                 </div>
@@ -1260,7 +1433,7 @@ function Invoice({ cargo, tickets, bookings, toast }) {
 
         {preview && (
           <div style={{ overflowY: "auto", maxHeight: 600 }}>
-            <div className="invoice-paper">
+            <div className="invoice-paper print-target">
               <div className="inv-header">
                 <div>
                   <div className="inv-company-name">PER WAANI</div>
@@ -1307,9 +1480,9 @@ function Invoice({ cargo, tickets, bookings, toast }) {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr><td colSpan={6} style={{ textAlign: "right", fontSize: 12, color: "#555", paddingTop: 8 }}>Subtotal</td><td style={{ textAlign: "right", paddingTop: 8 }}>{fmt(preview.subtotal)}</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "right", fontSize: 12, color: "#555", paddingTop: 8 }}>Subtotal</td><td style={{ textAlign: "right", paddingTop: 8, fontWeight: 600 }}>{fmt(preview.subtotal)}</td></tr>
                   <tr><td colSpan={6} style={{ textAlign: "right", fontSize: 12, color: "#555" }}>Tax ({preview.taxPct}%)</td><td style={{ textAlign: "right" }}>{fmt(preview.tax)}</td></tr>
-                  <tr className="inv-total-row"><td colSpan={6} style={{ textAlign: "right" }}>GRAND TOTAL (SSP)</td><td style={{ textAlign: "right" }}>{fmt(preview.grand)}</td></tr>
+                  <tr className="inv-total-row grand"><td colSpan={6} style={{ textAlign: "right", fontWeight: 700 }}>GRAND TOTAL (SSP)</td><td style={{ textAlign: "right", fontWeight: 700, color: "#c48b00", fontSize: 18 }}>{fmt(preview.grand)}</td></tr>
                 </tfoot>
               </table>
               <div className="inv-footer">Thank you for choosing Per Waani General Trading & Investment Co. Ltd.<br />This invoice is official proof of payment — please retain for your records.<br />Payment is due within 30 days. Queries: perwaani2023@gmail.com · +211 (0) 985 719 999</div>
