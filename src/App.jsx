@@ -1,16 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
+mport { useState, useEffect, useCallback } from "react";
 
 // ─── STORAGE HELPERS ───────────────────────────────────────────────────────────
 const KEYS = { cargo: "pw_cargo", tickets: "pw_tickets", bookings: "pw_bookings" };
 
 async function loadData(key) {
   try {
-    const r = await window.storage.get(key, true);
-    return r ? JSON.parse(r.value) : [];
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 async function saveData(key, arr) {
-  try { await window.storage.set(key, JSON.stringify(arr), true); } catch {}
+  try { localStorage.setItem(key, JSON.stringify(arr)); } catch {}
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -66,7 +66,6 @@ const CSS = `
 
   .app { display: flex; min-height: 100vh; }
 
-  /* SIDEBAR */
   .sidebar {
     width: 240px; min-width: 240px; background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto;
@@ -99,7 +98,6 @@ const CSS = `
   .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
   .sidebar-footer a { color: var(--blue); text-decoration: none; }
 
-  /* MAIN */
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .topbar {
     background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px;
@@ -124,10 +122,8 @@ const CSS = `
   .btn-ghost:hover { color: var(--text); border-color: var(--muted); }
   .btn-sm { padding: 5px 10px; font-size: 12px; }
 
-  /* CONTENT */
   .content { padding: 24px; flex: 1; overflow-x: hidden; }
 
-  /* CARDS */
   .card {
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
     padding: 20px; box-shadow: var(--card-shadow);
@@ -136,12 +132,10 @@ const CSS = `
   .card-value { font-size: 28px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
   .card-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
 
-  /* GRID */
   .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
   .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
   .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
 
-  /* KPI CARD */
   .kpi { position: relative; overflow: hidden; }
   .kpi::before {
     content: ''; position: absolute; top: -20px; right: -20px;
@@ -159,7 +153,6 @@ const CSS = `
   .kpi.blue .kpi-val { color: var(--blue); }
   .kpi.purple .kpi-val { color: var(--purple); }
 
-  /* TABLE */
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th {
@@ -172,7 +165,6 @@ const CSS = `
   tbody td { padding: 10px 12px; color: var(--text); vertical-align: middle; }
   .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
 
-  /* BADGE */
   .badge {
     display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
     border-radius: 20px; font-size: 11px; font-weight: 600;
@@ -184,7 +176,6 @@ const CSS = `
   .badge-purple { background: rgba(163,113,247,0.12); color: var(--purple); }
   .badge-muted { background: rgba(139,148,158,0.12); color: var(--muted); }
 
-  /* FORM */
   .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
   .form-group { display: flex; flex-direction: column; gap: 6px; }
   .form-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
@@ -197,7 +188,6 @@ const CSS = `
   .form-select option { background: var(--surface2); }
   .form-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 8px; }
 
-  /* MODAL */
   .overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
     z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -217,20 +207,16 @@ const CSS = `
   .modal-body { padding: 24px; }
   .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
 
-  /* SECTION HEADER */
   .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
   .section-title { font-size: 16px; font-weight: 700; }
 
-  /* SEARCH BAR */
   .search-wrap { position: relative; }
   .search-wrap input { padding-left: 36px; }
   .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 
-  /* PROGRESS */
   .progress-bar { background: var(--surface2); border-radius: 100px; height: 6px; overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 100px; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.4s; }
 
-  /* TABS */
   .tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: 10px; padding: 4px; margin-bottom: 20px; width: fit-content; }
   .tab {
     padding: 7px 16px; border-radius: 7px; cursor: pointer; font-size: 13px; font-weight: 600;
@@ -239,277 +225,90 @@ const CSS = `
   .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
   .tab:hover:not(.active) { color: var(--text); }
 
-  /* DIVIDER */
   .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
 
-  /* ALERT */
   .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
   .alert-info { background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.25); color: var(--blue); }
   .alert-success { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.25); color: var(--green); }
 
-  /* INVOICE PRINT */
+  /* ── INVOICE PAPER ── */
+  .invoice-paper {
+    width: 100%; max-width: 860px; margin: auto;
+    background: #ffffff !important; color: #111 !important;
+    padding: 28px 32px; box-sizing: border-box;
+    font-family: Arial, sans-serif; font-size: 13px;
+    border: 1px solid #ddd; border-radius: 8px;
+  }
+  .invoice-paper * { color: inherit; box-sizing: border-box; }
+  .inv-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #d9a000; padding-bottom: 14px; margin-bottom: 20px; }
+  .inv-company-name { font-size: 24px; font-weight: 800; color: #c48b00 !important; margin-bottom: 4px; }
+  .inv-address { font-size: 12px; line-height: 1.6; color: #555 !important; }
+  .inv-no { font-size: 28px; font-weight: 800; color: #c48b00 !important; text-align: right; }
+  .inv-label { font-size: 10px; font-weight: 700; color: #888 !important; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; margin-top: 6px; }
+  .inv-val { font-size: 13px; font-weight: 600; color: #111 !important; }
+  .inv-info { display: flex; justify-content: space-between; gap: 30px; margin-bottom: 20px; }
+  .inv-box { flex: 1; }
+  .inv-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: auto; }
+  .inv-table th { background: #f5f5f5 !important; color: #333 !important; padding: 8px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 2px solid #ddd; border-top: 1px solid #ddd; text-align: left; white-space: nowrap; }
+  .inv-table td { padding: 8px 10px; font-size: 12px; color: #111 !important; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .inv-table tfoot td { color: #111 !important; font-size: 13px; border-bottom: none; padding: 5px 10px; }
+  .inv-table tfoot tr:last-child td { border-top: 2px solid #222; font-size: 16px; font-weight: 800; color: #c48b00 !important; padding-top: 10px; }
+  .inv-footer { margin-top: 32px; text-align: center; font-size: 11px; color: #777 !important; border-top: 1px solid #ddd; padding-top: 12px; line-height: 1.7; }
 
-/* =========================
-   PROFESSIONAL A4 INVOICE
-========================= */
+  /* ── TICKET PAPER ── */
+  .ticket-paper { width: 210mm; margin: auto; background: #ffffff; color: #1a1a1a; font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 4px; overflow: hidden; }
+  .ticket-paper .tkt-header { background: linear-gradient(135deg, #c48b00, #f0a500); color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+  .ticket-paper .tkt-company { font-size: 18px; font-weight: bold; }
+  .ticket-paper .tkt-sub { font-size: 11px; opacity: 0.85; }
+  .ticket-paper .tkt-no { font-size: 22px; font-weight: bold; text-align: right; }
+  .ticket-paper .tkt-body { padding: 20px 24px; }
+  .ticket-paper .tkt-row { display: flex; gap: 0; border-bottom: 1px dashed #e0e0e0; }
+  .ticket-paper .tkt-cell { flex: 1; padding: 10px 14px; }
+  .ticket-paper .tkt-cell-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .ticket-paper .tkt-cell-val { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+  .ticket-paper .tkt-route { background: #fffbf0; border-left: 4px solid #f0a500; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  .ticket-paper .tkt-airport { font-size: 28px; font-weight: bold; color: #c48b00; }
+  .ticket-paper .tkt-city { font-size: 11px; color: #666; }
+  .ticket-paper .tkt-arrow { font-size: 22px; color: #c48b00; flex-shrink: 0; }
+  .ticket-paper .tkt-footer { background: #f9f9f9; padding: 12px 24px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #eee; }
+  .ticket-paper .tkt-amount { background: #fff8e8; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #f0a500; }
+  .ticket-paper .tkt-amount-label { font-size: 12px; font-weight: 700; color: #888; }
+  .ticket-paper .tkt-amount-val { font-size: 22px; font-weight: bold; color: #c48b00; }
 
-.invoice-paper {
-  width: 210mm;
-  min-height: 297mm;
-  margin: auto;
-  background: #ffffff;
-  color: #222;
-  padding: 20mm;
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
-  position: relative;
-}
-
-/* HEADER */
-.inv-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  border-bottom: 2px solid #d9a000;
-  padding-bottom: 15px;
-  margin-bottom: 25px;
-}
-
-.inv-company-name {
-  font-size: 28px;
-  font-weight: bold;
-  color: #c48b00;
-  margin-bottom: 6px;
-}
-
-.inv-address {
-  font-size: 13px;
-  line-height: 1.5;
-  color: #555;
-}
-
-.inv-no {
-  font-size: 34px;
-  font-weight: bold;
-  color: #c48b00;
-  text-align: right;
-}
-
-.inv-label {
-  font-size: 11px;
-  font-weight: bold;
-  color: #777;
-  margin-bottom: 3px;
-}
-
-.inv-val {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-/* CUSTOMER + PAYMENT */
-.inv-info {
-  display: flex;
-  justify-content: space-between;
-  gap: 40px;
-  margin-bottom: 25px;
-}
-
-.inv-box {
-  flex: 1;
-}
-
-/* TABLE */
-.inv-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-  table-layout: fixed;
-}
-
-.inv-table th {
-  background: #f4f4f4;
-  padding: 10px;
-  font-size: 12px;
-  text-transform: uppercase;
-  border-bottom: 2px solid #ddd;
-  text-align: left;
-}
-
-.inv-table td {
-  padding: 10px;
-  font-size: 13px;
-  border-bottom: 1px solid #eee;
-  vertical-align: top;
-  word-break: break-word;
-}
-
-/* COLUMN WIDTHS */
-.inv-table th:nth-child(1),
-.inv-table td:nth-child(1) {
-  width: 5%;
-}
-
-.inv-table th:nth-child(2),
-.inv-table td:nth-child(2) {
-  width: 40%;
-}
-
-.inv-table th:nth-child(3),
-.inv-table td:nth-child(3) {
-  width: 15%;
-}
-
-.inv-table th:nth-child(4),
-.inv-table td:nth-child(4) {
-  width: 15%;
-}
-
-.inv-table th:nth-child(5),
-.inv-table td:nth-child(5) {
-  width: 10%;
-}
-
-.inv-table th:nth-child(6),
-.inv-table td:nth-child(6) {
-  width: 15%;
-  text-align: right;
-}
-
-/* TOTALS */
-.inv-total-wrap {
-  margin-top: 25px;
-  margin-left: auto;
-  width: 320px;
-}
-
-.inv-total-row td {
-  padding: 6px 10px;
-  font-size: 14px;
-  border-bottom: none;
-}
-
-.inv-total-row.grand td {
-  border-top: 2px solid #222;
-  padding-top: 12px;
-  font-size: 18px;
-  font-weight: bold;
-  color: #c48b00;
-}
-
-.inv-grand-total {
-  border-top: 2px solid #222;
-  margin-top: 8px;
-  padding-top: 12px;
-  font-size: 22px;
-  font-weight: bold;
-  color: #c48b00;
-}
-
-/* FOOTER */
-.inv-footer {
-  margin-top: 50px;
-  text-align: center;
-  font-size: 12px;
-  color: #777;
-  border-top: 1px solid #ddd;
-  padding-top: 15px;
-  line-height: 1.6;
-}
-
-/* PRINT SETTINGS */
-@media print {
-
-  body {
-    background: white !important;
+  /* ── PRINT ── */
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+    body { background: white !important; color: #111 !important; font-family: Arial, sans-serif !important; }
+    .sidebar, .topbar, .btn, .section-header, .alert, .tabs, .search-wrap { display: none !important; }
+    .content > * { display: none !important; }
+    .invoice-paper, #ticket-print-area { display: block !important; }
+    .invoice-paper { width: 100%; min-height: auto; padding: 10mm; box-shadow: none; border: none; background: #fff !important; color: #111 !important; }
+    .invoice-paper * { color: inherit !important; }
+    .inv-company-name, .inv-no { color: #c48b00 !important; }
+    .inv-address, .inv-label { color: #555 !important; }
+    .inv-header { border-bottom: 2px solid #d9a000 !important; }
+    .inv-table th { background: #f4f4f4 !important; color: #333 !important; border-bottom: 2px solid #ddd !important; }
+    .inv-table td { color: #111 !important; border-bottom: 1px solid #eee !important; }
+    .inv-table tfoot tr:last-child td { color: #c48b00 !important; border-top: 2px solid #222 !important; }
+    .inv-footer { color: #777 !important; border-top: 1px solid #ddd !important; }
+    .ticket-paper { display: block !important; width: 100%; min-height: auto; padding: 0; box-shadow: none; border: 1px solid #ddd !important; }
+    .ticket-paper .tkt-header { background: #c48b00 !important; color: #fff !important; }
+    .ticket-paper .tkt-header * { color: #fff !important; }
+    .ticket-paper .tkt-airport { color: #c48b00 !important; }
+    .ticket-paper .tkt-amount { background: #fff8e8 !important; }
+    .ticket-paper .tkt-amount-val { color: #c48b00 !important; }
+    @page { size: A4; margin: 10mm; }
   }
 
-  .sidebar,
-  .topbar,
-  .btn,
-  .section-header,
-  .alert,
-  .tabs,
-  .search-wrap {
-    display: none !important;
-  }
+  .form-input.error, .form-select.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(248,81,73,0.1); }
+  .form-error { font-size: 11px; color: var(--red); margin-top: 2px; }
+  .form-input[type="number"] { font-family: 'JetBrains Mono', monospace; }
 
-  /* Hide all cards except the invoice paper when printing */
-  .content > * {
-    display: none !important;
-  }
-
-  /* Show only the print-target elements */
-  .invoice-paper,
-  #ticket-print-area {
-    display: block !important;
-  }
-
-  #ticket-print-area {
-    display: block !important;
-  }
-
-  .invoice-paper, .ticket-paper {
-    width: 100%;
-    min-height: auto;
-    padding: 10mm;
-    box-shadow: none;
-    border: none;
-  }
-
-  @page {
-    size: A4;
-    margin: 10mm;
-  }
-}
-/* TICKET PAPER */
-.ticket-paper {
-  width: 210mm;
-  margin: auto;
-  background: #ffffff;
-  color: #1a1a1a;
-  font-family: Arial, sans-serif;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  overflow: hidden;
-}
-.ticket-paper .tkt-header {
-  background: linear-gradient(135deg, #c48b00, #f0a500);
-  color: #fff;
-  padding: 16px 24px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.ticket-paper .tkt-company { font-size: 18px; font-weight: bold; }
-.ticket-paper .tkt-sub { font-size: 11px; opacity: 0.85; }
-.ticket-paper .tkt-no { font-size: 22px; font-weight: bold; text-align: right; }
-.ticket-paper .tkt-body { padding: 20px 24px; }
-.ticket-paper .tkt-row { display: flex; gap: 0; border-bottom: 1px dashed #e0e0e0; }
-.ticket-paper .tkt-cell { flex: 1; padding: 10px 14px; }
-.ticket-paper .tkt-cell-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
-.ticket-paper .tkt-cell-val { font-size: 14px; font-weight: 600; color: #1a1a1a; }
-.ticket-paper .tkt-route { background: #fffbf0; border-left: 4px solid #f0a500; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
-.ticket-paper .tkt-airport { font-size: 28px; font-weight: bold; color: #c48b00; }
-.ticket-paper .tkt-city { font-size: 11px; color: #666; }
-.ticket-paper .tkt-arrow { font-size: 22px; color: #c48b00; flex-shrink: 0; }
-.ticket-paper .tkt-footer { background: #f9f9f9; padding: 12px 24px; font-size: 11px; color: #888; text-align: center; border-top: 1px solid #eee; }
-.ticket-paper .tkt-amount { background: #fff8e8; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; border-top: 2px solid #f0a500; }
-.ticket-paper .tkt-amount-label { font-size: 12px; font-weight: 700; color: #888; }
-.ticket-paper .tkt-amount-val { font-size: 22px; font-weight: bold; color: #c48b00; }
-
-/* FORM VALIDATION */
-.form-input.error, .form-select.error { border-color: var(--red) !important; box-shadow: 0 0 0 3px rgba(248,81,73,0.1); }
-.form-error { font-size: 11px; color: var(--red); margin-top: 2px; }
-.form-input[type="number"] { font-family: 'JetBrains Mono', monospace; }
-
-/* CHART */
   .bar-chart { display: flex; align-items: flex-end; gap: 8px; height: 100px; padding: 8px 0; }
   .bar { flex: 1; border-radius: 4px 4px 0 0; transition: all 0.3s; cursor: pointer; position: relative; min-width: 20px; }
   .bar:hover { opacity: 0.8; }
   .bar-label { text-align: center; font-size: 10px; color: var(--muted); margin-top: 4px; }
 
-  /* MOBILE */
   @media (max-width: 768px) {
     .sidebar { position: fixed; z-index: 50; height: 100vh; }
     .sidebar:not(.open) { transform: translateX(-100%); }
@@ -521,15 +320,12 @@ const CSS = `
     .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
   }
 
-  /* SCROLLBAR */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 
-  /* GLOW ACCENT */
   .glow { box-shadow: 0 0 20px rgba(240,165,0,0.15); }
 
-  /* TOAST */
   .toast {
     position: fixed; bottom: 24px; right: 24px; z-index: 999;
     background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
@@ -542,15 +338,12 @@ const CSS = `
   .toast.success { border-color: var(--green); color: var(--green); }
   .toast.error { border-color: var(--red); color: var(--red); }
 
-  /* EMPTY STATE */
   .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
   .empty svg { margin-bottom: 12px; opacity: 0.3; }
   .empty h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
   .empty p { font-size: 13px; }
 
-  .payment-pill {
-    display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
-  }
+  .payment-pill { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
   .pill-cash { background: rgba(63,185,80,0.15); color: var(--green); }
   .pill-mobile { background: rgba(88,166,255,0.15); color: var(--blue); }
   .pill-bank { background: rgba(163,113,247,0.15); color: var(--purple); }
@@ -559,7 +352,6 @@ const CSS = `
 
   .tag { display: inline-flex; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(240,165,0,0.12); color: var(--accent); }
 
-  /* GOOGLE SHEETS CTA */
   .sheets-banner {
     background: linear-gradient(135deg, rgba(63,185,80,0.08), rgba(88,166,255,0.08));
     border: 1px solid rgba(63,185,80,0.25); border-radius: 12px; padding: 16px 20px;
@@ -580,7 +372,6 @@ const PayPill = ({ method }) => {
   return <span className={`payment-pill ${cls}`}>{method || "—"}</span>;
 };
 
-// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
 const StatusBadge = ({ status }) => {
   const s = (status || "").toLowerCase();
   const cls = s === "paid" || s === "confirmed" || s === "delivered" ? "badge-green" :
@@ -588,7 +379,6 @@ const StatusBadge = ({ status }) => {
   return <span className={`badge ${cls}`}>{status || "—"}</span>;
 };
 
-// ─── TOAST COMPONENT ─────────────────────────────────────────────────────────
 const Toast = ({ msg, type, onClose }) => {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return <div className={`toast ${type}`}><Icon name="check" size={16} />{msg}</div>;
@@ -603,26 +393,21 @@ function Dashboard({ cargo, tickets, bookings }) {
   const payBreakdown = {};
   cargo.forEach(r => { const p = r.paymentMethod || "Other"; payBreakdown[p] = (payBreakdown[p] || 0) + Number(r.amount || 0); });
   tickets.forEach(r => { const p = r.paymentStatus || "Other"; payBreakdown[p] = (payBreakdown[p] || 0) + Number(r.fees || 0); });
-
   const itemBreakdown = {};
   cargo.forEach(r => { const d = r.description || "Other"; itemBreakdown[d] = (itemBreakdown[d] || 0) + 1; });
-
   const target = 20000000;
   const pct = Math.min(100, (combined / target) * 100);
-
   const recentAll = [
     ...cargo.map(r => ({ type: "Cargo", id: r.id, name: r.senderName || "—", amount: r.amount, date: r.receivingDate, color: "accent" })),
     ...tickets.map(r => ({ type: "Ticket", id: r.ticketNo, name: r.passengerName || "—", amount: r.fees, date: r.date, color: "blue" })),
     ...bookings.map(r => ({ type: "Booking", id: r.bookingId, name: r.passengerName || "—", amount: r.total, date: r.bookingDate, color: "purple" })),
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 8);
-
   const barMax = Math.max(totalCargoRev, totalTicketRev, totalBookingRev, 1);
   const bars = [
     { label: "Cargo", val: totalCargoRev, color: "#f0a500" },
     { label: "Tickets", val: totalTicketRev, color: "#58a6ff" },
     { label: "Bookings", val: totalBookingRev, color: "#a371f7" },
   ];
-
   return (
     <div>
       <div className="sheets-banner">
@@ -630,12 +415,11 @@ function Dashboard({ cargo, tickets, bookings }) {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="#3fb950"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Connected to Google Sheets · perwaani2023@gmail.com</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>All data entered below is synced across all 10 users in real time via shared storage. Open your Google Sheet to export data anytime.</div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Per Waani Operations · perwaani2023@gmail.com</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>All data is saved locally. Export from the Reports page.</div>
         </div>
-        <span className="badge badge-green"><Icon name="check" size={12} />Live</span>
+        <span className="badge badge-green"><Icon name="check" size={12} />Active</span>
       </div>
-
       <div className="grid-4" style={{ marginBottom: 20 }}>
         <div className="card kpi gold glow">
           <div className="kpi-icon"><Icon name="money" size={40} /></div>
@@ -662,7 +446,6 @@ function Dashboard({ cargo, tickets, bookings }) {
           <div className="card-sub">{bookings.length} bookings</div>
         </div>
       </div>
-
       <div className="grid-2" style={{ marginBottom: 20 }}>
         <div className="card">
           <div className="section-header">
@@ -693,7 +476,6 @@ function Dashboard({ cargo, tickets, bookings }) {
             ))}
           </div>
         </div>
-
         <div className="card">
           <div className="section-title" style={{ marginBottom: 12 }}>Payment Breakdown</div>
           {Object.keys(payBreakdown).length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No payment data yet.</div> : (
@@ -716,15 +498,10 @@ function Dashboard({ cargo, tickets, bookings }) {
           )}
         </div>
       </div>
-
       <div className="card">
         <div className="section-title" style={{ marginBottom: 14 }}>Recent Activity</div>
         {recentAll.length === 0 ? (
-          <div className="empty">
-            <Icon name="dashboard" size={40} />
-            <h3>No activity yet</h3>
-            <p>Start by adding cargo, tickets, or bookings.</p>
-          </div>
+          <div className="empty"><Icon name="dashboard" size={40} /><h3>No activity yet</h3><p>Start by adding cargo, tickets, or bookings.</p></div>
         ) : (
           <div className="table-wrap">
             <table>
@@ -755,6 +532,7 @@ function CargoRegister({ data, setData, toast }) {
   const [editing, setEditing] = useState(null);
   const emptyForm = { receivingDate: today(), description: "", unitKg: "", unitPrice: "", qty: "", spec: "", senderName: "", senderLocation: "", senderContact: "", receiverName: "", receiverLocation: "", receiverContact: "", paymentMethod: "Cash", amount: "" };
   const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
 
   const set = (k, v) => {
     setForm(f => {
@@ -767,8 +545,6 @@ function CargoRegister({ data, setData, toast }) {
       return nf;
     });
   };
-
-  const [errors, setErrors] = useState({});
 
   const validate = () => {
     const e = {};
@@ -832,7 +608,6 @@ function CargoRegister({ data, setData, toast }) {
           </button>
         </div>
       </div>
-
       {filtered.length === 0 ? (
         <div className="card"><div className="empty"><Icon name="cargo" size={40} /><h3>No cargo entries yet</h3><p>Click "New Entry" to add the first cargo record.</p></div></div>
       ) : (
@@ -849,14 +624,8 @@ function CargoRegister({ data, setData, toast }) {
                     <td style={{ color: "var(--muted)", fontSize: 12 }}>{r.spec || "—"}</td>
                     <td className="mono">{r.qty || "—"}</td>
                     <td className="mono">{fmt(r.unitPrice)}</td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{r.senderName || "—"}</div>
-                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.senderLocation || ""}</div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{r.receiverName || "—"}</div>
-                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.receiverLocation || ""}</div>
-                    </td>
+                    <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.senderName || "—"}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{r.senderLocation || ""}</div></td>
+                    <td><div style={{ fontWeight: 600, fontSize: 13 }}>{r.receiverName || "—"}</div><div style={{ fontSize: 11, color: "var(--muted)" }}>{r.receiverLocation || ""}</div></td>
                     <td><PayPill method={r.paymentMethod} /></td>
                     <td className="mono" style={{ color: "var(--accent)", fontWeight: 700 }}>{fmt(r.amount)}</td>
                     <td>
@@ -877,93 +646,44 @@ function CargoRegister({ data, setData, toast }) {
           </div>
         </div>
       )}
-
       {showForm && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal">
             <div className="modal-header">
-              <div>
-                <div className="modal-title">{editing ? "Edit Cargo Entry" : "New Cargo Entry"}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>Customer Receiving Register</div>
-              </div>
+              <div><div className="modal-title">{editing ? "Edit Cargo Entry" : "New Cargo Entry"}</div><div style={{ fontSize: 12, color: "var(--muted)" }}>Customer Receiving Register</div></div>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}><Icon name="close" size={16} /></button>
             </div>
             <div className="modal-body">
               <div className="form-grid">
-                <div className="form-group">
-                  <label className="form-label">Receiving Date *</label>
-                  <input type="date" className="form-input" value={form.receivingDate} onChange={e => set("receivingDate", e.target.value)} />
-                </div>
+                <div className="form-group"><label className="form-label">Receiving Date *</label><input type="date" className="form-input" value={form.receivingDate} onChange={e => set("receivingDate", e.target.value)} /></div>
                 <div className="form-group">
                   <label className="form-label">Description / Item *</label>
                   <select className={`form-select${errors.description ? " error" : ""}`} value={form.description} onChange={e => set("description", e.target.value)}>
                     <option value="">Select type…</option>
-                    {["Clothes", "M-items", "Starlink", "P-solar", "S-battery", 
-                      "Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics", "Food Items", "Documents", "Other"].map(o => <option key={o}>{o}</option>)}
+                    {["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o => <option key={o}>{o}</option>)}
                   </select>
                   {errors.description && <span className="form-error">{errors.description}</span>}
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Unit / kg</label>
-                  <input type="text" className="form-input" placeholder="e.g. kg, pcs" value={form.unitKg} onChange={e => set("unitKg", e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Unit Price (SSP)</label>
-                  <input type="number" min="0" step="any" className={`form-input${errors.unitPrice ? " error" : ""}`} value={form.unitPrice} onChange={e => set("unitPrice", e.target.value)} />
-                  {errors.unitPrice && <span className="form-error">{errors.unitPrice}</span>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Qty</label>
-                  <input type="number" min="0" step="any" className={`form-input${errors.qty ? " error" : ""}`} value={form.qty} onChange={e => set("qty", e.target.value)} />
-                  {errors.qty && <span className="form-error">{errors.qty}</span>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Spec</label>
-                  <input type="text" className="form-input" placeholder="e.g. kg, pcs" value={form.spec} onChange={e => set("spec", e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Sender Name *</label>
-                  <input type="text" className={`form-input${errors.senderName ? " error" : ""}`} value={form.senderName} onChange={e => set("senderName", e.target.value)} />
-                  {errors.senderName && <span className="form-error">{errors.senderName}</span>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Sender Location</label>
-                  <input type="text" className="form-input" value={form.senderLocation} onChange={e => set("senderLocation", e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Sender Contact</label>
-                  <input type="tel" className={`form-input${errors.senderContact ? " error" : ""}`} value={form.senderContact} onChange={e => set("senderContact", e.target.value)} />
-                  {errors.senderContact && <span className="form-error">{errors.senderContact}</span>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Receiver Name *</label>
-                  <input type="text" className={`form-input${errors.receiverName ? " error" : ""}`} value={form.receiverName} onChange={e => set("receiverName", e.target.value)} />
-                  {errors.receiverName && <span className="form-error">{errors.receiverName}</span>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Receiver Location</label>
-                  <input type="text" className="form-input" value={form.receiverLocation} onChange={e => set("receiverLocation", e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Receiver Contact</label>
-                  <input type="tel" className={`form-input${errors.receiverContact ? " error" : ""}`} value={form.receiverContact} onChange={e => set("receiverContact", e.target.value)} />
-                  {errors.receiverContact && <span className="form-error">{errors.receiverContact}</span>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Payment Method</label>
+                <div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" placeholder="e.g. kg, pcs" value={form.unitKg} onChange={e => set("unitKg", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" min="0" step="any" className={`form-input${errors.unitPrice ? " error" : ""}`} value={form.unitPrice} onChange={e => set("unitPrice", e.target.value)} />{errors.unitPrice && <span className="form-error">{errors.unitPrice}</span>}</div>
+                <div className="form-group"><label className="form-label">Qty</label><input type="number" min="0" step="any" className={`form-input${errors.qty ? " error" : ""}`} value={form.qty} onChange={e => set("qty", e.target.value)} />{errors.qty && <span className="form-error">{errors.qty}</span>}</div>
+                <div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e => set("spec", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName ? " error" : ""}`} value={form.senderName} onChange={e => set("senderName", e.target.value)} />{errors.senderName && <span className="form-error">{errors.senderName}</span>}</div>
+                <div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e => set("senderLocation", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className={`form-input${errors.senderContact ? " error" : ""}`} value={form.senderContact} onChange={e => set("senderContact", e.target.value)} />{errors.senderContact && <span className="form-error">{errors.senderContact}</span>}</div>
+                <div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName ? " error" : ""}`} value={form.receiverName} onChange={e => set("receiverName", e.target.value)} />{errors.receiverName && <span className="form-error">{errors.receiverName}</span>}</div>
+                <div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e => set("receiverLocation", e.target.value)} /></div>
+                <div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className={`form-input${errors.receiverContact ? " error" : ""}`} value={form.receiverContact} onChange={e => set("receiverContact", e.target.value)} />{errors.receiverContact && <span className="form-error">{errors.receiverContact}</span>}</div>
+                <div className="form-group"><label className="form-label">Payment Method</label>
                   <select className="form-select" value={form.paymentMethod} onChange={e => set("paymentMethod", e.target.value)}>
-                    {["Cash", "Mobile Money", "Bank Transfer", "Credit", "Ethiopia Birr"].map(o => <option key={o}>{o}</option>)}
+                    {["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Amount (SSP) <span style={{ color: "var(--green)", fontSize: 10 }}>Auto-calculated</span></label>
-                  <input type="number" className="form-input" value={form.amount} onChange={e => set("amount", e.target.value)} style={{ borderColor: "var(--green)", opacity: 0.9 }} />
-                </div>
+                <div className="form-group"><label className="form-label">Amount (SSP) <span style={{ color: "var(--green)", fontSize: 10 }}>Auto-calculated</span></label><input type="number" className="form-input" value={form.amount} onChange={e => set("amount", e.target.value)} style={{ borderColor: "var(--green)" }} /></div>
               </div>
               {form.unitPrice && form.qty && (
                 <div className="alert alert-info" style={{ marginTop: 12 }}>
-                  <Icon name="check" size={14} />
-                  Auto-calculated: {form.qty} × SSP {fmt(form.unitPrice)} = <strong>SSP {fmt(form.amount)}</strong>
+                  <Icon name="check" size={14} />Auto-calculated: {form.qty} × SSP {fmt(form.unitPrice)} = <strong>SSP {fmt(form.amount)}</strong>
                 </div>
               )}
             </div>
@@ -983,11 +703,12 @@ function Ticketing({ data, setData, toast }) {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
+  const [printTkt, setPrintTkt] = useState(null);
   const nextTicket = 117 + data.length;
   const emptyForm = { ticketNo: nextTicket, date: today(), passengerName: "", phone: "", fees: "", weightKg: "", checkInTime: "", departureTime: "", arrivalTime: "", from: "", to: "", flightNo: "", paymentStatus: "Paid", remarks: "" };
   const [form, setForm] = useState(emptyForm);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const [errors, setErrors] = useState({});
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const validateTicket = () => {
     const e = {};
@@ -1014,11 +735,16 @@ function Ticketing({ data, setData, toast }) {
     setData(updated); await saveData(KEYS.tickets, updated);
     setShowForm(false); setEditing(null); setForm({ ...emptyForm, ticketNo: nextTicket + 1 });
   };
+
   const del = async (id) => { const u = data.filter(r => r.id !== id); setData(u); await saveData(KEYS.tickets, u); toast("Deleted", "error"); };
-  const [printTkt, setPrintTkt] = useState(null);
   const printTicket = (r) => { setPrintTkt(r); setTimeout(() => window.print(), 300); };
   const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); setErrors({}); };
-  const filtered = data.filter(r => (r.passengerName || "").toLowerCase().includes(search.toLowerCase()) || (r.ticketNo + "").includes(search) || (r.from || "").toLowerCase().includes(search.toLowerCase()) || (r.to || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = data.filter(r =>
+    (r.passengerName || "").toLowerCase().includes(search.toLowerCase()) ||
+    (r.ticketNo + "").includes(search) ||
+    (r.from || "").toLowerCase().includes(search.toLowerCase()) ||
+    (r.to || "").toLowerCase().includes(search.toLowerCase())
+  );
   const totalFees = data.reduce((s, r) => s + Number(r.fees || 0), 0);
 
   return (
@@ -1052,13 +778,7 @@ function Ticketing({ data, setData, toast }) {
                     <td style={{ fontSize: 12 }}>{r.date || "—"}</td>
                     <td style={{ fontWeight: 600 }}>{r.passengerName || "—"}</td>
                     <td style={{ fontSize: 12, color: "var(--muted)" }}>{r.phone || "—"}</td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-                        <span style={{ color: "var(--blue)" }}>{r.from || "—"}</span>
-                        <span style={{ color: "var(--muted)" }}>→</span>
-                        <span style={{ color: "var(--purple)" }}>{r.to || "—"}</span>
-                      </div>
-                    </td>
+                    <td><div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><span style={{ color: "var(--blue)" }}>{r.from || "—"}</span><span style={{ color: "var(--muted)" }}>→</span><span style={{ color: "var(--purple)" }}>{r.to || "—"}</span></div></td>
                     <td className="mono" style={{ fontSize: 12 }}>{r.flightNo || "—"}</td>
                     <td style={{ fontSize: 12 }}>{r.departureTime || "—"}</td>
                     <td className="mono" style={{ color: "var(--green)", fontWeight: 700 }}>{fmt(r.fees)}</td>
@@ -1085,9 +805,7 @@ function Ticketing({ data, setData, toast }) {
         <div className="overlay" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal">
             <div className="modal-header">
-              <div><div className="modal-title">{editing ? "Edit Ticket" : "Issue New Ticket"}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>Ticket No: <strong style={{ color: "var(--accent)" }}>{form.ticketNo}</strong></div>
-              </div>
+              <div><div className="modal-title">{editing ? "Edit Ticket" : "Issue New Ticket"}</div><div style={{ fontSize: 12, color: "var(--muted)" }}>Ticket No: <strong style={{ color: "var(--accent)" }}>{form.ticketNo}</strong></div></div>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}><Icon name="close" size={16} /></button>
             </div>
             <div className="modal-body">
@@ -1112,16 +830,12 @@ function Ticketing({ data, setData, toast }) {
                     {errors[k] && <span className="form-error">{errors[k]}</span>}
                   </div>
                 ))}
-                <div className="form-group">
-                  <label className="form-label">Payment Status</label>
+                <div className="form-group"><label className="form-label">Payment Status</label>
                   <select className="form-select" value={form.paymentStatus} onChange={e => set("paymentStatus", e.target.value)}>
-                    {["Paid", "Pending", "Partial", "Cancelled"].map(o => <option key={o}>{o}</option>)}
+                    {["Paid","Pending","Partial","Cancelled"].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Remarks</label>
-                  <input type="text" className="form-input" value={form.remarks || ""} onChange={e => set("remarks", e.target.value)} />
-                </div>
+                <div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks || ""} onChange={e => set("remarks", e.target.value)} /></div>
               </div>
             </div>
             <div className="modal-footer">
@@ -1131,31 +845,17 @@ function Ticketing({ data, setData, toast }) {
           </div>
         </div>
       )}
-
-      {/* PRINTABLE TICKET — hidden on screen, visible on print */}
       {printTkt && (
-        <div style={{ display: "none" }} className="print-target" id="ticket-print-area">
+        <div style={{ display: "none" }} id="ticket-print-area">
           <div className="ticket-paper">
             <div className="tkt-header">
-              <div>
-                <div className="tkt-company">PER WAANI</div>
-                <div className="tkt-sub">General Trading & Investment Co. Ltd · Juba Airport Road, South Sudan</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 11, opacity: 0.8 }}>BOARDING PASS / TICKET</div>
-                <div className="tkt-no">#{printTkt.ticketNo}</div>
-              </div>
+              <div><div className="tkt-company">PER WAANI</div><div className="tkt-sub">General Trading & Investment Co. Ltd · Juba Airport Road, South Sudan</div></div>
+              <div style={{ textAlign: "right" }}><div style={{ fontSize: 11, opacity: 0.8 }}>BOARDING PASS / TICKET</div><div className="tkt-no">#{printTkt.ticketNo}</div></div>
             </div>
             <div className="tkt-route">
-              <div>
-                <div className="tkt-airport">{printTkt.from || "—"}</div>
-                <div className="tkt-city">Origin</div>
-              </div>
+              <div><div className="tkt-airport">{printTkt.from || "—"}</div><div className="tkt-city">Origin</div></div>
               <div className="tkt-arrow">✈ ──────</div>
-              <div>
-                <div className="tkt-airport">{printTkt.to || "—"}</div>
-                <div className="tkt-city">Destination</div>
-              </div>
+              <div><div className="tkt-airport">{printTkt.to || "—"}</div><div className="tkt-city">Destination</div></div>
             </div>
             <div className="tkt-body">
               <div className="tkt-row">
@@ -1179,10 +879,7 @@ function Ticketing({ data, setData, toast }) {
               <div><div className="tkt-amount-label">SERVICE FEE</div></div>
               <div className="tkt-amount-val">SSP {fmt(printTkt.fees)}</div>
             </div>
-            <div className="tkt-footer">
-              Per Waani General Trading & Investment Co. Ltd · +211 (0) 920 000 149 · perwaani2023@gmail.com<br />
-              This ticket is your official travel document — please retain for your records.
-            </div>
+            <div className="tkt-footer">Per Waani General Trading & Investment Co. Ltd · +211 (0) 920 000 149 · perwaani2023@gmail.com<br />This ticket is your official travel document — please retain for your records.</div>
           </div>
         </div>
       )}
@@ -1197,13 +894,13 @@ function Bookings({ data, setData, toast }) {
   const [editing, setEditing] = useState(null);
   const emptyForm = { bookingDate: today(), passengerName: "", phone: "", idPassport: "", from: "", to: "", flightNo: "", departureDate: "", departureTime: "", seatClass: "Economy", luggageKg: "", fare: "", taxes: "", status: "Booked" };
   const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
+
   const set = (k, v) => setForm(f => {
     const nf = { ...f, [k]: v };
     if (k === "fare" || k === "taxes") nf.total = (parseFloat(k === "fare" ? v : nf.fare) || 0) + (parseFloat(k === "taxes" ? v : nf.taxes) || 0);
     return nf;
   });
-
-  const [errors, setErrors] = useState({});
 
   const validateBooking = () => {
     const e = {};
@@ -1232,9 +929,14 @@ function Bookings({ data, setData, toast }) {
     setData(updated); await saveData(KEYS.bookings, updated);
     setShowForm(false); setEditing(null); setForm(emptyForm); setErrors({});
   };
+
   const del = async (id) => { const u = data.filter(r => r.id !== id); setData(u); await saveData(KEYS.bookings, u); toast("Deleted", "error"); };
   const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); setErrors({}); };
-  const filtered = data.filter(r => (r.passengerName || "").toLowerCase().includes(search.toLowerCase()) || (r.bookingId || "").includes(search) || (r.from || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = data.filter(r =>
+    (r.passengerName || "").toLowerCase().includes(search.toLowerCase()) ||
+    (r.bookingId || "").includes(search) ||
+    (r.from || "").toLowerCase().includes(search.toLowerCase())
+  );
   const totalRev = data.reduce((s, r) => s + Number(r.total || 0), 0);
 
   return (
@@ -1268,11 +970,7 @@ function Bookings({ data, setData, toast }) {
                     <td style={{ fontSize: 12 }}>{r.bookingDate || "—"}</td>
                     <td style={{ fontWeight: 600 }}>{r.passengerName || "—"}</td>
                     <td style={{ fontSize: 12, color: "var(--muted)" }}>{r.phone || "—"}</td>
-                    <td><div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
-                      <span style={{ color: "var(--blue)" }}>{r.from || "—"}</span>
-                      <span style={{ color: "var(--muted)" }}>→</span>
-                      <span style={{ color: "var(--purple)" }}>{r.to || "—"}</span>
-                    </div></td>
+                    <td><div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}><span style={{ color: "var(--blue)" }}>{r.from || "—"}</span><span style={{ color: "var(--muted)" }}>→</span><span style={{ color: "var(--purple)" }}>{r.to || "—"}</span></div></td>
                     <td className="mono" style={{ fontSize: 12 }}>{r.flightNo || "—"}</td>
                     <td style={{ fontSize: 12 }}>{r.departureDate ? `${r.departureDate} ${r.departureTime || ""}` : "—"}</td>
                     <td><span className="badge badge-blue">{r.seatClass || "—"}</span></td>
@@ -1300,9 +998,7 @@ function Bookings({ data, setData, toast }) {
         <div className="overlay" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal">
             <div className="modal-header">
-              <div><div className="modal-title">{editing ? "Edit Booking" : "New Flight Booking"}</div>
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>Booking policy: cancellations ≥6 hrs before departure</div>
-              </div>
+              <div><div className="modal-title">{editing ? "Edit Booking" : "New Flight Booking"}</div></div>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowForm(false)}><Icon name="close" size={16} /></button>
             </div>
             <div className="modal-body">
@@ -1318,24 +1014,19 @@ function Bookings({ data, setData, toast }) {
                 <div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime || ""} onChange={e => set("departureTime", e.target.value)} /></div>
                 <div className="form-group"><label className="form-label">Seat Class</label>
                   <select className="form-select" value={form.seatClass || "Economy"} onChange={e => set("seatClass", e.target.value)}>
-                    {["Economy", "Business", "First Class"].map(o => <option key={o}>{o}</option>)}
+                    {["Economy","Business","First Class"].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
                 <div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" min="0" step="any" className={`form-input${errors.luggageKg ? " error" : ""}`} value={form.luggageKg || ""} onChange={e => set("luggageKg", e.target.value)} />{errors.luggageKg && <span className="form-error">{errors.luggageKg}</span>}</div>
                 <div className="form-group"><label className="form-label">Fare (SSP)</label><input type="number" min="0" step="any" className={`form-input${errors.fare ? " error" : ""}`} value={form.fare || ""} onChange={e => set("fare", e.target.value)} />{errors.fare && <span className="form-error">{errors.fare}</span>}</div>
                 <div className="form-group"><label className="form-label">Taxes (SSP)</label><input type="number" min="0" step="any" className={`form-input${errors.taxes ? " error" : ""}`} value={form.taxes || ""} onChange={e => set("taxes", e.target.value)} />{errors.taxes && <span className="form-error">{errors.taxes}</span>}</div>
-                <div className="form-group"><label className="form-label">Total (SSP) <span style={{ color: "var(--green)", fontSize: 10 }}>Auto</span></label>
-                  <input type="number" className="form-input" value={form.total || ""} readOnly style={{ borderColor: "var(--green)" }} />
-                </div>
+                <div className="form-group"><label className="form-label">Total (SSP) <span style={{ color: "var(--green)", fontSize: 10 }}>Auto</span></label><input type="number" className="form-input" value={form.total || ""} readOnly style={{ borderColor: "var(--green)" }} /></div>
                 <div className="form-group"><label className="form-label">Status</label>
                   <select className="form-select" value={form.status || "Booked"} onChange={e => set("status", e.target.value)}>
-                    {["Booked", "Confirmed", "Cancelled", "Pending"].map(o => <option key={o}>{o}</option>)}
+                    {["Booked","Confirmed","Cancelled","Pending"].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
               </div>
-              {form.fare && <div className="alert alert-info" style={{ marginTop: 12 }}>
-                <Icon name="check" size={14} />Total = Fare SSP {fmt(form.fare)} + Taxes SSP {fmt(form.taxes)} = <strong>SSP {fmt(form.total)}</strong>
-              </div>}
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
@@ -1366,59 +1057,45 @@ function Invoice({ cargo, tickets, bookings, toast }) {
     if (!rec) { toast("Select a valid record", "error"); return; }
     let lines = [], bill = {}, amount = 0;
     if (form.type === "cargo") {
-      bill = { name: rec.senderName, phone: rec.senderContact, id: "—", route: `${rec.senderLocation} → ${rec.receiverLocation}` };
-      lines = [{ desc: rec.description, date: rec.receivingDate, wt: rec.unitKg, unitPrice: rec.unitPrice, qty: rec.qty, discount: 0, amount: rec.amount }];
+      bill = { name: rec.senderName, phone: rec.senderContact, route: `${rec.senderLocation} → ${rec.receiverLocation}` };
+      lines = [{ desc: rec.description, date: rec.receivingDate, wt: rec.unitKg, unitPrice: rec.unitPrice, qty: rec.qty, amount: rec.amount }];
       amount = Number(rec.amount || 0);
     } else if (form.type === "tickets") {
-      bill = { name: rec.passengerName, phone: rec.phone, id: "—", route: `${rec.from} → ${rec.to}` };
-      lines = [{ desc: `Flight Ticket – ${rec.from} → ${rec.to}`, date: rec.date, wt: rec.weightKg, unitPrice: rec.fees, qty: 1, discount: 0, amount: rec.fees }];
+      bill = { name: rec.passengerName, phone: rec.phone, route: `${rec.from} → ${rec.to}` };
+      lines = [{ desc: `Flight Ticket – ${rec.from} → ${rec.to}`, date: rec.date, wt: rec.weightKg, unitPrice: rec.fees, qty: 1, amount: rec.fees }];
       amount = Number(rec.fees || 0);
     } else {
-      bill = { name: rec.passengerName, phone: rec.phone, id: rec.idPassport, route: `${rec.from} → ${rec.to}` };
+      bill = { name: rec.passengerName, phone: rec.phone, route: `${rec.from} → ${rec.to}` };
       lines = [
-        { desc: `Flight Fare – ${rec.seatClass}`, date: rec.bookingDate, wt: rec.luggageKg, unitPrice: rec.fare, qty: 1, discount: 0, amount: rec.fare },
-        { desc: "Taxes & Fees", date: rec.bookingDate, wt: "—", unitPrice: rec.taxes, qty: 1, discount: 0, amount: rec.taxes },
+        { desc: `Flight Fare – ${rec.seatClass}`, date: rec.bookingDate, wt: rec.luggageKg, unitPrice: rec.fare, qty: 1, amount: rec.fare },
+        { desc: "Taxes & Fees", date: rec.bookingDate, wt: "—", unitPrice: rec.taxes, qty: 1, amount: rec.taxes },
       ];
       amount = Number(rec.total || 0);
     }
     const tax = amount * (parseFloat(form.taxPct) / 100 || 0);
-    setPreview({ ...form, bill, lines, subtotal: amount, tax, grand: amount + tax, rec });
+    setPreview({ ...form, bill, lines, subtotal: amount, tax, grand: amount + tax });
     toast("Invoice generated ✓", "success");
   };
 
   return (
     <div>
       <div className="section-header"><div className="section-title">Invoice Generator</div></div>
-      <div className="grid-2">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.6fr", gap: 16, alignItems: "start" }}>
         <div className="card">
           <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 14 }}>Generate Invoice</div>
           <div className="form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
-            <div className="form-group">
-              <label className="form-label">Invoice No.</label>
-              <input className="form-input" value={form.invNo} onChange={e => set("invNo", e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Invoice Date</label>
-              <input type="date" className="form-input" value={form.invDate} onChange={e => set("invDate", e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Due Date</label>
-              <input type="date" className="form-input" value={form.dueDate} onChange={e => set("dueDate", e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Tax (%)</label>
-              <input type="number" className="form-input" value={form.taxPct} onChange={e => set("taxPct", e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Record Type</label>
+            <div className="form-group"><label className="form-label">Invoice No.</label><input className="form-input" value={form.invNo} onChange={e => set("invNo", e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className="form-input" value={form.invDate} onChange={e => set("invDate", e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={form.dueDate} onChange={e => set("dueDate", e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className="form-input" value={form.taxPct} onChange={e => set("taxPct", e.target.value)} /></div>
+            <div className="form-group"><label className="form-label">Record Type</label>
               <select className="form-select" value={form.type} onChange={e => { set("type", e.target.value); set("refId", ""); }}>
                 <option value="cargo">Cargo</option>
                 <option value="tickets">Ticket</option>
                 <option value="bookings">Booking</option>
               </select>
             </div>
-            <div className="form-group">
-              <label className="form-label">Select Record</label>
+            <div className="form-group"><label className="form-label">Select Record</label>
               <select className="form-select" value={form.refId} onChange={e => set("refId", e.target.value)}>
                 <option value="">— Choose —</option>
                 {refs[form.type].map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
@@ -1431,41 +1108,44 @@ function Invoice({ cargo, tickets, bookings, toast }) {
           {refs[form.type].length === 0 && <div className="alert alert-info" style={{ marginTop: 12 }}><Icon name="check" size={14} />No {form.type} records yet. Add some data first.</div>}
         </div>
 
-        {preview && (
-          <div style={{ overflowY: "auto", maxHeight: 600 }}>
-            <div className="invoice-paper print-target">
+        {preview ? (
+          <div style={{ overflowY: "auto" }}>
+            <div className="invoice-paper">
               <div className="inv-header">
                 <div>
                   <div className="inv-company-name">PER WAANI</div>
-                  <div style={{ fontWeight: 700, fontSize: 13, marginTop: 2 }}>General Trading & Investment Co. Ltd</div>
+                  <div style={{ fontWeight: 700, fontSize: 13, marginTop: 2, color: "#333" }}>General Trading & Investment Co. Ltd</div>
                   <div className="inv-address">Juba Airport Road, South Sudan<br />perwaani2023@gmail.com<br />+211 (0) 920 000 149 · +211 (0) 985 719 999</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: 1 }}>Invoice</div>
                   <div className="inv-no">{preview.invNo}</div>
-                  <div className="inv-label" style={{ marginTop: 8 }}>Date</div>
-                  <div className="inv-val">{preview.invDate}</div>
+                  <div className="inv-label">Date</div><div className="inv-val">{preview.invDate}</div>
                   {preview.dueDate && <><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}
                 </div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24, padding: "16px 0", borderTop: "2px solid #eee", borderBottom: "1px solid #eee" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #eee" }}>
                 <div>
                   <div className="inv-label">Bill To</div>
-                  <div className="inv-val" style={{ fontSize: 15, marginTop: 4 }}>{preview.bill.name}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "#111" }}>{preview.bill.name}</div>
                   <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{preview.bill.phone}</div>
                   <div style={{ fontSize: 12, color: "#555" }}>{preview.bill.route}</div>
                 </div>
                 <div>
                   <div className="inv-label">Payment Details</div>
-                  <div style={{ fontSize: 12, marginTop: 4 }}><span style={{ color: "#888" }}>Method: </span>Cash / Mobile Money</div>
-                  <div style={{ fontSize: 12 }}><span style={{ color: "#888" }}>Ref: </span>{preview.invNo}</div>
-                  <div style={{ fontSize: 12 }}><span style={{ color: "#888" }}>Type: </span>{form.type.charAt(0).toUpperCase() + form.type.slice(1)}</div>
+                  <div style={{ fontSize: 12, marginTop: 4, color: "#333" }}><span style={{ color: "#888" }}>Method: </span>Cash / Mobile Money</div>
+                  <div style={{ fontSize: 12, color: "#333" }}><span style={{ color: "#888" }}>Ref: </span>{preview.invNo}</div>
+                  <div style={{ fontSize: 12, color: "#333" }}><span style={{ color: "#888" }}>Type: </span>{form.type.charAt(0).toUpperCase() + form.type.slice(1)}</div>
                 </div>
               </div>
 
               <table className="inv-table">
-                <thead><tr><th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price (SSP)</th><th>Qty</th><th>Amount (SSP)</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price (SSP)</th><th>Qty</th><th style={{ textAlign: "right" }}>Amount (SSP)</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {preview.lines.map((l, i) => (
                     <tr key={i}>
@@ -1473,22 +1153,35 @@ function Invoice({ cargo, tickets, bookings, toast }) {
                       <td>{l.desc || "—"}</td>
                       <td>{l.date || "—"}</td>
                       <td>{l.wt || "—"}</td>
-                      <td style={{ textAlign: "right" }}>{fmt(l.unitPrice)}</td>
-                      <td style={{ textAlign: "center" }}>{l.qty || 1}</td>
+                      <td>{fmt(l.unitPrice)}</td>
+                      <td>{l.qty || 1}</td>
                       <td style={{ textAlign: "right", fontWeight: 600 }}>{fmt(l.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr><td colSpan={6} style={{ textAlign: "right", fontSize: 12, color: "#555", paddingTop: 8 }}>Subtotal</td><td style={{ textAlign: "right", paddingTop: 8, fontWeight: 600 }}>{fmt(preview.subtotal)}</td></tr>
-                  <tr><td colSpan={6} style={{ textAlign: "right", fontSize: 12, color: "#555" }}>Tax ({preview.taxPct}%)</td><td style={{ textAlign: "right" }}>{fmt(preview.tax)}</td></tr>
-                  <tr className="inv-total-row grand"><td colSpan={6} style={{ textAlign: "right", fontWeight: 700 }}>GRAND TOTAL (SSP)</td><td style={{ textAlign: "right", fontWeight: 700, color: "#c48b00", fontSize: 18 }}>{fmt(preview.grand)}</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "right", color: "#555" }}>Subtotal</td><td style={{ textAlign: "right" }}>{fmt(preview.subtotal)}</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "right", color: "#555" }}>Tax ({preview.taxPct}%)</td><td style={{ textAlign: "right" }}>{fmt(preview.tax)}</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "right", fontWeight: 700 }}>GRAND TOTAL (SSP)</td><td style={{ textAlign: "right", fontWeight: 800, color: "#c48b00" }}>{fmt(preview.grand)}</td></tr>
                 </tfoot>
               </table>
-              <div className="inv-footer">Thank you for choosing Per Waani General Trading & Investment Co. Ltd.<br />This invoice is official proof of payment — please retain for your records.<br />Payment is due within 30 days. Queries: perwaani2023@gmail.com · +211 (0) 985 719 999</div>
+
+              <div className="inv-footer">
+                Thank you for choosing Per Waani General Trading & Investment Co. Ltd.<br />
+                This invoice is official proof of payment — please retain for your records.<br />
+                Payment due within 30 days · perwaani2023@gmail.com · +211 (0) 985 719 999
+              </div>
             </div>
             <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
               <button className="btn btn-primary" onClick={() => window.print()}><Icon name="print" size={15} />Print Invoice</button>
+            </div>
+          </div>
+        ) : (
+          <div className="card" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
+            <div className="empty">
+              <Icon name="invoice" size={40} />
+              <h3>No invoice generated yet</h3>
+              <p>Fill the form and click Generate Invoice.</p>
             </div>
           </div>
         )}
@@ -1504,8 +1197,8 @@ function Reports({ cargo, tickets, bookings }) {
   const bookingRev = bookings.reduce((s, r) => s + Number(r.total || 0), 0);
   const total = cargoRev + ticketRev + bookingRev;
   const txns = cargo.length + tickets.length + bookings.length;
-
   const target = 20000000;
+
   const kpis = [
     { name: "Cargo Revenue (SSP)", actual: cargoRev, target: 15000000, owner: "Operations" },
     { name: "Ticket Revenue (SSP)", actual: ticketRev, target: 5000000, owner: "Ticketing" },
@@ -1525,16 +1218,16 @@ function Reports({ cargo, tickets, bookings }) {
       <div className="section-header">
         <div>
           <div className="section-title">Monthly Operations Report</div>
-          <div style={{ fontSize: 12, color: "var(--muted)" }}>Auto-linked from all source sheets · Generated {new Date().toLocaleDateString()}</div>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Generated {new Date().toLocaleDateString()}</div>
         </div>
         <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print" size={15} />Print Report</button>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 14, letterSpacing: 0.5 }}>A · REVENUE SUMMARY</div>
+        <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 14 }}>A · REVENUE SUMMARY</div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Metric</th><th>Customers/Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target (SSP)</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead>
+            <thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target (SSP)</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead>
             <tbody>
               <tr>
                 <td style={{ fontWeight: 600 }}>Total Revenue (SSP)</td>
@@ -1558,11 +1251,6 @@ function Reports({ cargo, tickets, bookings }) {
                 <td className="mono">{((txns / 50) * 100).toFixed(1)}%</td>
                 <td><StatusBadge status={txns >= 50 ? "Confirmed" : "Pending"} /></td>
               </tr>
-              <tr>
-                <td style={{ fontWeight: 600 }}>Avg Transaction (SSP)</td>
-                <td className="mono">{fmt(txns > 0 ? total / txns : 0)}</td>
-                <td colSpan={7} style={{ color: "var(--muted)", fontSize: 12 }}>Average across all modules</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -1574,7 +1262,7 @@ function Reports({ cargo, tickets, bookings }) {
           {Object.keys(payBreak).length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No payment data yet.</div> : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Method</th><th>Transactions</th><th>Amount (SSP)</th><th>% Share</th><th>Avg/Txn (SSP)</th></tr></thead>
+                <thead><tr><th>Method</th><th>Transactions</th><th>Amount (SSP)</th><th>% Share</th></tr></thead>
                 <tbody>
                   {Object.entries(payBreak).map(([k, v]) => (
                     <tr key={k}>
@@ -1582,7 +1270,6 @@ function Reports({ cargo, tickets, bookings }) {
                       <td className="mono">{v.txns}</td>
                       <td className="mono" style={{ color: "var(--accent)" }}>{fmt(v.amount)}</td>
                       <td className="mono">{total > 0 ? ((v.amount / total) * 100).toFixed(1) : 0}%</td>
-                      <td className="mono">{fmt(v.txns > 0 ? v.amount / v.txns : 0)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1590,20 +1277,18 @@ function Reports({ cargo, tickets, bookings }) {
             </div>
           )}
         </div>
-
         <div className="card">
           <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 14 }}>C · CARGO ITEM BREAKDOWN</div>
           {Object.keys(itemBreak).length === 0 ? <div style={{ color: "var(--muted)", fontSize: 13 }}>No cargo data yet.</div> : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Item Type</th><th>Shipments</th><th>Revenue (SSP)</th><th>Weight (kg)</th><th>% Revenue</th></tr></thead>
+                <thead><tr><th>Item Type</th><th>Shipments</th><th>Revenue (SSP)</th><th>% Revenue</th></tr></thead>
                 <tbody>
                   {Object.entries(itemBreak).map(([k, v]) => (
                     <tr key={k}>
                       <td><span className="tag">{k}</span></td>
                       <td className="mono">{v.count}</td>
                       <td className="mono" style={{ color: "var(--accent)" }}>{fmt(v.amount)}</td>
-                      <td className="mono">{fmt(v.wt)}</td>
                       <td className="mono">{cargoRev > 0 ? ((v.amount / cargoRev) * 100).toFixed(1) : 0}%</td>
                     </tr>
                   ))}
@@ -1641,7 +1326,7 @@ function Reports({ cargo, tickets, bookings }) {
           </table>
         </div>
         <div style={{ textAlign: "right", marginTop: 12, fontSize: 12, color: "var(--muted)" }}>
-          Per Waani General Trading & Investment Co. Ltd · perwaani2023@gmail.com · Report: {new Date().toLocaleDateString()}
+          Per Waani General Trading & Investment Co. Ltd · perwaani2023@gmail.com · {new Date().toLocaleDateString()}
         </div>
       </div>
     </div>
@@ -1674,7 +1359,10 @@ export default function App() {
     { id: "reports", label: "Reports", icon: "report" },
   ];
 
-  const titles = { dashboard: "Operations Dashboard", cargo: "Cargo Register", ticketing: "Ticketing", bookings: "Bookings", invoice: "Invoice", reports: "Monthly Reports" };
+  const titles = {
+    dashboard: "Operations Dashboard", cargo: "Cargo Register",
+    ticketing: "Ticketing", bookings: "Bookings", invoice: "Invoice", reports: "Monthly Reports",
+  };
 
   return (
     <>
@@ -1698,13 +1386,13 @@ export default function App() {
             ))}
           </nav>
           {sideOpen && <div className="sidebar-footer">
-            <div style={{ marginBottom: 4 }}>10 Users · Shared Storage</div>
-            <div><a href="mailto:omotmam2024@gmail.com">omotmam2024@gmail.com</a></div>
-            <div style={{ marginTop: 4, fontSize: 10 }}>Juba Airport Road, South Sudan</div>
+            <div style={{ marginBottom: 4 }}>Juba Airport Road, South Sudan</div>
+            <div><a href="mailto:perwaani2023@gmail.com">perwaani2023@gmail.com</a></div>
+            <div style={{ marginTop: 4, fontSize: 10 }}>+211 (0) 920 000 149</div>
           </div>}
         </div>
 
-        <div className="main" style={{ marginLeft: 0 }}>
+        <div className="main">
           <div className="topbar">
             <div className="topbar-left">
               <button className="btn btn-ghost btn-sm" onClick={() => setSideOpen(p => !p)} style={{ padding: "6px 8px" }}><Icon name="menu" size={18} /></button>
@@ -1714,16 +1402,14 @@ export default function App() {
               </div>
             </div>
             <div className="topbar-right">
-              <span className="badge badge-green"><Icon name="check" size={12} />Synced</span>
+              <span className="badge badge-green"><Icon name="check" size={12} />Active</span>
               <span style={{ fontSize: 12, color: "var(--muted)" }}>{new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
             </div>
           </div>
 
           <div className="content">
             {loading ? (
-              <div style={{ textAlign: "center", padding: "80px 20px", color: "var(--muted)" }}>
-                <div style={{ fontSize: 14 }}>Loading data…</div>
-              </div>
+              <div style={{ textAlign: "center", padding: "80px 20px", color: "var(--muted)" }}>Loading…</div>
             ) : (
               <>
                 {page === "dashboard" && <Dashboard cargo={cargo} tickets={tickets} bookings={bookings} />}
