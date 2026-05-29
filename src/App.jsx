@@ -249,8 +249,16 @@ const CSS = `
 
   /* INVOICE PRINT */
   .invoice-paper {
-    background: #fff; color: #1a1a2e; border-radius: 12px; padding: 40px;
-    font-family: 'Sora', sans-serif; max-width: 700px; margin: 0 auto;
+   background: #fff;
+  color: #1a1a2e;
+  border-radius: 8px;
+  padding: 20px;
+  font-family: 'Sora', sans-serif;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   }
   .invoice-paper * { color: inherit; }
   .inv-header { display: flex; justify-content: space-between; margin-bottom: 32px; }
@@ -259,9 +267,50 @@ const CSS = `
   .inv-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; }
   .inv-val { font-size: 13px; font-weight: 600; color: #1a1a2e; }
   .inv-no { font-size: 28px; font-weight: 800; color: #c47a00; }
-  .inv-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 12.5px; }
-  .inv-table th { background: #f5f5f5; padding: 8px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #555; }
-  .inv-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+  .inv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-size: 11px;
+  table-layout: fixed;
+  word-wrap: break-word;
+}
+
+.inv-table th,
+.inv-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #eee;
+  overflow-wrap: break-word;
+}
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  .invoice-paper {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 10px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .inv-table {
+    font-size: 10px !important;
+  }
+
+  .inv-table th,
+  .inv-table td {
+    padding: 4px 6px !important;
+  }
+
+  .btn,
+  .sidebar,
+  .topbar {
+    display: none !important;
+  }
+}
   .inv-total-row td { font-weight: 700; font-size: 14px; border-top: 2px solid #1a1a2e; color: #c47a00; }
   .inv-footer { text-align: center; font-size: 11px; color: #888; margin-top: 24px; border-top: 1px solid #eee; padding-top: 16px; }
 
