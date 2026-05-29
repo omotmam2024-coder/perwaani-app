@@ -819,7 +819,8 @@ function CargoRegister({ data, setData, toast }) {
                   <label className="form-label">Description / Item *</label>
                   <select className="form-select" value={form.description} onChange={e => set("description", e.target.value)}>
                     <option value="">Select type…</option>
-                    {["Clothes", "M-items", "Starlink", "P-solar", "S-battery", "Electronics", "Food Items", "Documents", "Other"].map(o => <option key={o}>{o}</option>)}
+                    {["Clothes", "M-items", "Starlink", "P-solar", "S-battery", 
+                      "Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics", "Food Items", "Documents", "Other"].map(o => <option key={o}>{o}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
