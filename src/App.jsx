@@ -248,7 +248,7 @@ const CSS = `
   .alert-success { background: rgba(63,185,80,0.1); border: 1px solid rgba(63,185,80,0.25); color: var(--green); }
 
   /* INVOICE PRINT */
-  ```css
+
 /* =========================
    PROFESSIONAL A4 INVOICE
 ========================= */
