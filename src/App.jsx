@@ -362,8 +362,6 @@ function Dashboard({ cargo, tickets, bookings }) {
   const totalTicketRev = tickets.reduce((s, r) => s + Number(r.fees || 0), 0);
   const totalBookingRev = bookings.reduce((s, r) => s + Number(r.total || 0), 0);
   const combined = totalCargoRev + totalTicketRev + totalBookingRev;
-  const totalTxns = cargo.length + tickets.length + bookings.length;
-
   const payBreakdown = {};
   cargo.forEach(r => { const p = r.paymentMethod || "Other"; payBreakdown[p] = (payBreakdown[p] || 0) + Number(r.amount || 0); });
   tickets.forEach(r => { const p = r.paymentStatus || "Other"; payBreakdown[p] = (payBreakdown[p] || 0) + Number(r.fees || 0); });
