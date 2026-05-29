@@ -392,7 +392,7 @@ function Dashboard({ cargo, tickets, bookings }) {
           <svg width="22" height="22" viewBox="0 0 24 24" fill="#3fb950"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Connected to Google Sheets · omotmam2024@gmail.com</div>
+          <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 2 }}>Connected to Google Sheets · perwaani2023@gmail.com</div>
           <div style={{ fontSize: 12, color: "var(--muted)" }}>All data entered below is synced across all 10 users in real time via shared storage. Open your Google Sheet to export data anytime.</div>
         </div>
         <span className="badge badge-green"><Icon name="check" size={12} />Live</span>
