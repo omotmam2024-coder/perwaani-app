@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
+import { useState, useEffect, useCallback } from "react";
 
 const KEYS = { cargo: "pw_cargo", tickets: "pw_tickets", bookings: "pw_bookings" };
 
@@ -37,35 +36,146 @@ const Icon = ({ name, size = 20 }) => {
   return icons[name] || null;
 };
 
-/* ─────────────────────────────────────────────
-   PRINT PORTAL – renders content into document.body
-   so the print CSS can target it directly without
-   being blocked by any hidden ancestor elements.
-───────────────────────────────────────────── */
-function PrintPortal({ children, onAfterPrint }) {
-  const elRef = useRef(null);
+/* ══════════════════════════════════════════════════════════════
+   PRINT-IN-NEW-WINDOW  –  the only reliable cross-browser /
+   cross-deployment print method. Opens a popup, writes a fully
+   self-contained HTML document with all styles inlined, calls
+   print(), then closes. Zero dependency on React's DOM tree,
+   CSS cascade, or portal timing.
+══════════════════════════════════════════════════════════════ */
+const PRINT_STYLES = `
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;background:#fff;color:#111;padding:10mm}
+  @page{size:A4;margin:10mm}
+  @media print{body{padding:0}}
+  .invoice-paper{width:100%;max-width:860px;margin:auto;background:#fff;color:#111;padding:28px 32px;font-family:Arial,sans-serif;font-size:13px;border:1px solid #ddd;border-radius:8px}
+  .inv-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #d9a000;padding-bottom:14px;margin-bottom:20px}
+  .inv-company-name{font-size:24px;font-weight:800;color:#c48b00;margin-bottom:4px}
+  .inv-address{font-size:12px;line-height:1.6;color:#555}
+  .inv-no{font-size:28px;font-weight:800;color:#c48b00;text-align:right}
+  .inv-label{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;margin-top:6px}
+  .inv-val{font-size:13px;font-weight:600;color:#111}
+  .inv-bill-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #eee}
+  .inv-bill-name{font-size:15px;font-weight:700;margin-top:4px;color:#111}
+  .inv-bill-sub{font-size:12px;color:#555}
+  .inv-table{width:100%;border-collapse:collapse;margin-top:10px}
+  .inv-table th{background:#f5f5f5;color:#333;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd;border-top:1px solid #ddd;text-align:left;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .inv-table td{padding:8px 10px;font-size:12px;color:#111;border-bottom:1px solid #eee;vertical-align:middle}
+  .inv-table tfoot td{font-size:13px;border-bottom:none;padding:5px 10px;color:#111}
+  .inv-table tfoot tr.grand td{border-top:2px solid #222;font-size:16px;font-weight:800;color:#c48b00;padding-top:10px}
+  .inv-footer{margin-top:32px;text-align:center;font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:12px;line-height:1.7}
+  .ticket-paper{width:100%;max-width:680px;margin:auto;background:#fff;color:#1a1a1a;font-family:Arial,sans-serif;border:1px solid #ddd;border-radius:4px;overflow:hidden}
+  .tkt-header{background:linear-gradient(135deg,#c48b00,#f0a500);color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tkt-company{font-size:18px;font-weight:bold}
+  .tkt-sub{font-size:11px;opacity:0.85}
+  .tkt-no{font-size:22px;font-weight:bold;text-align:right}
+  .tkt-route{background:#fffbf0;border-left:4px solid #f0a500;padding:12px 24px;display:flex;align-items:center;gap:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tkt-airport{font-size:28px;font-weight:bold;color:#c48b00}
+  .tkt-city{font-size:11px;color:#666}
+  .tkt-arrow{font-size:22px;color:#c48b00;flex-shrink:0}
+  .tkt-body{padding:20px 24px}
+  .tkt-row{display:flex;border-bottom:1px dashed #e0e0e0}
+  .tkt-cell{flex:1;padding:10px 14px}
+  .tkt-cell-label{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px}
+  .tkt-cell-val{font-size:14px;font-weight:600;color:#1a1a1a}
+  .tkt-amount{background:#fff8e8;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;border-top:2px solid #f0a500;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tkt-amount-label{font-size:12px;font-weight:700;color:#888}
+  .tkt-amount-val{font-size:22px;font-weight:bold;color:#c48b00}
+  .tkt-footer{background:#f9f9f9;padding:12px 24px;font-size:11px;color:#888;text-align:center;border-top:1px solid #eee;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+`;
 
-  useEffect(() => {
-    const el = document.createElement("div");
-    el.id = "pw-print-portal";
-    document.body.appendChild(el);
-    elRef.current = el;
+function printInNewWindow(htmlContent) {
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) {
+    alert("Please allow pop-ups for this site to enable printing.");
+    return;
+  }
+  win.document.write(
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>Perwaani Print</title><style>" +
+    PRINT_STYLES +
+    "</style></head><body>" +
+    htmlContent +
+    "<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<\/script></body></html>"
+  );
+  win.document.close();
+}
 
-    const handleAfterPrint = () => {
-      if (onAfterPrint) onAfterPrint();
-    };
-    window.addEventListener("afterprint", handleAfterPrint);
+function buildInvoiceHTML(preview) {
+  const linesHTML = preview.lines.map((l, i) =>
+    "<tr><td>" + (i+1) + "</td><td>" + (l.desc||"—") + "</td><td>" + (l.date||"—") + "</td><td>" +
+    (l.wt||"—") + "</td><td>" + fmt(l.unitPrice) + "</td><td>" + (l.qty||1) + "</td>" +
+    "<td style=\"text-align:right;font-weight:600\">" + fmt(l.amount) + "</td></tr>"
+  ).join("");
+  return (
+    "<div class=\"invoice-paper\">" +
+      "<div class=\"inv-header\">" +
+        "<div><div class=\"inv-company-name\">PERWAANI</div>" +
+        "<div style=\"font-weight:700;font-size:13px;color:#333\">General Trading &amp; Investment Co. Ltd</div>" +
+        "<div class=\"inv-address\">Juba Airport Road, South Sudan<br>perwaani2023@gmail.com &middot; +211 (0) 920 000 149</div></div>" +
+        "<div style=\"text-align:right\">" +
+          "<div style=\"font-size:11px;font-weight:700;color:#888;text-transform:uppercase\">Invoice</div>" +
+          "<div class=\"inv-no\">" + preview.invNo + "</div>" +
+          "<div class=\"inv-label\">Date</div><div class=\"inv-val\">" + preview.invDate + "</div>" +
+          (preview.dueDate ? "<div class=\"inv-label\">Due</div><div class=\"inv-val\">" + preview.dueDate + "</div>" : "") +
+        "</div>" +
+      "</div>" +
+      "<div class=\"inv-bill-grid\">" +
+        "<div><div class=\"inv-label\">Bill To</div>" +
+        "<div class=\"inv-bill-name\">" + (preview.bill.name||"—") + "</div>" +
+        "<div class=\"inv-bill-sub\">" + (preview.bill.phone||"") + "</div>" +
+        "<div class=\"inv-bill-sub\">" + (preview.bill.route||"") + "</div></div>" +
+        "<div><div class=\"inv-label\">Payment Details</div>" +
+        "<div style=\"font-size:12px;margin-top:4px;color:#333\"><span style=\"color:#888\">Method: </span>Cash / Mobile Money</div>" +
+        "<div style=\"font-size:12px;color:#333\"><span style=\"color:#888\">Ref: </span>" + preview.invNo + "</div></div>" +
+      "</div>" +
+      "<table class=\"inv-table\"><thead><tr>" +
+        "<th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price (SSP)</th><th>Qty</th>" +
+        "<th style=\"text-align:right\">Amount (SSP)</th></tr></thead>" +
+      "<tbody>" + linesHTML + "</tbody>" +
+      "<tfoot>" +
+        "<tr><td colspan=\"6\" style=\"text-align:right;color:#555\">Subtotal</td><td style=\"text-align:right\">" + fmt(preview.subtotal) + "</td></tr>" +
+        "<tr><td colspan=\"6\" style=\"text-align:right;color:#555\">Tax (" + preview.taxPct + "%)</td><td style=\"text-align:right\">" + fmt(preview.tax) + "</td></tr>" +
+        "<tr class=\"grand\"><td colspan=\"6\" style=\"text-align:right;font-weight:700\">GRAND TOTAL (SSP)</td><td style=\"text-align:right\">" + fmt(preview.grand) + "</td></tr>" +
+      "</tfoot></table>" +
+      "<div class=\"inv-footer\">Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br>This invoice is official proof of payment. Payment due within 30 days.</div>" +
+    "</div>"
+  );
+}
 
-    return () => {
-      window.removeEventListener("afterprint", handleAfterPrint);
-      if (elRef.current && document.body.contains(elRef.current)) {
-        document.body.removeChild(elRef.current);
-      }
-    };
-  }, [onAfterPrint]);
-
-  if (!elRef.current) return null;
-  return createPortal(children, elRef.current);
+function buildTicketHTML(tkt) {
+  return (
+    "<div class=\"ticket-paper\">" +
+      "<div class=\"tkt-header\">" +
+        "<div><div class=\"tkt-company\">PERWAANI</div>" +
+        "<div class=\"tkt-sub\">General Trading &amp; Investment Co. Ltd &middot; Juba Airport Road, South Sudan</div></div>" +
+        "<div style=\"text-align:right\">" +
+          "<div style=\"font-size:11px;opacity:0.8\">BOARDING PASS</div>" +
+          "<div class=\"tkt-no\">#" + tkt.ticketNo + "</div></div>" +
+      "</div>" +
+      "<div class=\"tkt-route\">" +
+        "<div><div class=\"tkt-airport\">" + (tkt.from||"—") + "</div><div class=\"tkt-city\">Origin</div></div>" +
+        "<div class=\"tkt-arrow\">&#9992; &#8212;&#8212;&#8212;&#8212;&#8212;</div>" +
+        "<div><div class=\"tkt-airport\">" + (tkt.to||"—") + "</div><div class=\"tkt-city\">Destination</div></div>" +
+      "</div>" +
+      "<div class=\"tkt-body\">" +
+        "<div class=\"tkt-row\">" +
+          "<div class=\"tkt-cell\"><div class=\"tkt-cell-label\">Passenger</div><div class=\"tkt-cell-val\">" + (tkt.passengerName||"—") + "</div></div>" +
+          "<div class=\"tkt-cell\"><div class=\"tkt-cell-label\">Phone</div><div class=\"tkt-cell-val\">" + (tkt.phone||"—") + "</div></div>" +
+          "<div class=\"tkt-cell\"><div class=\"tkt-cell-label\">Date</div><div class=\"tkt-cell-val\">" + (tkt.date||"—") + "</div></div>" +
+        "</div>" +
+        "<div class=\"tkt-row\">" +
+          "<div class=\"tkt-cell\"><div class=\"tkt-cell-label\">Flight</div><div class=\"tkt-cell-val\">" + (tkt.flightNo||"—") + "</div></div>" +
+          "<div class=\"tkt-cell\"><div class=\"tkt-cell-label\">Departure</div><div class=\"tkt-cell-val\">" + (tkt.departureTime||"—") + "</div></div>" +
+          "<div class=\"tkt-cell\"><div class=\"tkt-cell-label\">Arrival</div><div class=\"tkt-cell-val\">" + (tkt.arrivalTime||"—") + "</div></div>" +
+        "</div>" +
+      "</div>" +
+      "<div class=\"tkt-amount\">" +
+        "<div><div class=\"tkt-amount-label\">SERVICE FEE</div></div>" +
+        "<div class=\"tkt-amount-val\">SSP " + fmt(tkt.fees) + "</div>" +
+      "</div>" +
+      "<div class=\"tkt-footer\">Perwaani General Trading &amp; Investment Co. Ltd &middot; +211 (0) 920 000 149 &middot; perwaani2023@gmail.com</div>" +
+    "</div>"
+  );
 }
 
 const CSS = `
@@ -182,69 +292,7 @@ const CSS = `
   .stat-name{font-size:13px;color:var(--muted)}
   .stat-num{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600}
 
-  /* ─── PRINT STYLES ─────────────────────────────────────
-     The portal renders #pw-print-portal directly in <body>.
-     We hide everything in body EXCEPT the portal, then style
-     the portal's content for paper output.
-  ──────────────────────────────────────────────────────── */
-  @media print {
-    @page { size: A4; margin: 10mm; }
-
-    /* Hide the entire app shell */
-    body > *:not(#pw-print-portal) { display: none !important; }
-
-    /* Show portal and reset its container */
-    #pw-print-portal {
-      display: block !important;
-      position: static !important;
-      width: 100% !important;
-      background: #fff !important;
-    }
-
-    /* ── Invoice paper ── */
-    .invoice-paper {
-      display: block !important;
-      width: 100% !important;
-      max-width: 100% !important;
-      padding: 0 !important;
-      box-shadow: none !important;
-      border: none !important;
-      background: #ffffff !important;
-      color: #111 !important;
-      font-family: Arial, sans-serif !important;
-      font-size: 13px !important;
-    }
-    .invoice-paper * { color: inherit; box-sizing: border-box; }
-    .inv-company-name { color: #c48b00 !important; }
-    .inv-no { color: #c48b00 !important; }
-    .inv-table th { background: #f4f4f4 !important; color: #333 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .inv-table td { color: #111 !important; }
-    .inv-table tfoot tr:last-child td { color: #c48b00 !important; }
-    .inv-footer { color: #777 !important; }
-
-    /* ── Ticket paper ── */
-    .ticket-paper {
-      display: block !important;
-      width: 190mm !important;
-      background: #ffffff !important;
-      color: #1a1a1a !important;
-    }
-    .ticket-paper .tkt-header {
-      background: linear-gradient(135deg, #c48b00, #f0a500) !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .ticket-paper .tkt-route {
-      background: #fffbf0 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .ticket-paper .tkt-amount {
-      background: #fff8e8 !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-  }
+  /* Print handled by printInNewWindow — no @media print needed here */
 
   /* ─── Invoice paper (screen preview) ─── */
   .invoice-paper{
@@ -305,133 +353,6 @@ const Toast = ({ msg, type, onClose }) => {
 };
 
 /* ─── Invoice document (used in both preview and print portal) ─── */
-function InvoiceDocument({ preview }) {
-  return (
-    <div className="invoice-paper">
-      <div className="inv-header">
-        <div>
-          <div className="inv-company-name">PERWAANI</div>
-          <div style={{ fontWeight: 700, fontSize: 13, color: "#333" }}>General Trading &amp; Investment Co. Ltd</div>
-          <div className="inv-address">
-            Juba Airport Road, South Sudan<br />
-            perwaani2023@gmail.com · +211 (0) 920 000 149
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Invoice</div>
-          <div className="inv-no">{preview.invNo}</div>
-          <div className="inv-label">Date</div>
-          <div className="inv-val">{preview.invDate}</div>
-          {preview.dueDate && <><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #eee" }}>
-        <div>
-          <div className="inv-label">Bill To</div>
-          <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "#111" }}>{preview.bill.name}</div>
-          <div style={{ fontSize: 12, color: "#555" }}>{preview.bill.phone}</div>
-          <div style={{ fontSize: 12, color: "#555" }}>{preview.bill.route}</div>
-        </div>
-        <div>
-          <div className="inv-label">Payment Details</div>
-          <div style={{ fontSize: 12, marginTop: 4, color: "#333" }}><span style={{ color: "#888" }}>Method: </span>Cash / Mobile Money</div>
-          <div style={{ fontSize: 12, color: "#333" }}><span style={{ color: "#888" }}>Ref: </span>{preview.invNo}</div>
-        </div>
-      </div>
-
-      <table className="inv-table">
-        <thead>
-          <tr>
-            <th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th>
-            <th>Unit Price (SSP)</th><th>Qty</th>
-            <th style={{ textAlign: "right" }}>Amount (SSP)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {preview.lines.map((l, i) => (
-            <tr key={i}>
-              <td>{i + 1}</td>
-              <td>{l.desc || "—"}</td>
-              <td>{l.date || "—"}</td>
-              <td>{l.wt || "—"}</td>
-              <td>{fmt(l.unitPrice)}</td>
-              <td>{l.qty || 1}</td>
-              <td style={{ textAlign: "right", fontWeight: 600 }}>{fmt(l.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td colSpan={6} style={{ textAlign: "right", color: "#555" }}>Subtotal</td>
-            <td style={{ textAlign: "right" }}>{fmt(preview.subtotal)}</td>
-          </tr>
-          <tr>
-            <td colSpan={6} style={{ textAlign: "right", color: "#555" }}>Tax ({preview.taxPct}%)</td>
-            <td style={{ textAlign: "right" }}>{fmt(preview.tax)}</td>
-          </tr>
-          <tr>
-            <td colSpan={6} style={{ textAlign: "right", fontWeight: 700 }}>GRAND TOTAL (SSP)</td>
-            <td style={{ textAlign: "right", fontWeight: 800, color: "#c48b00" }}>{fmt(preview.grand)}</td>
-          </tr>
-        </tfoot>
-      </table>
-
-      <div className="inv-footer">
-        Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br />
-        This invoice is official proof of payment. Payment due within 30 days.
-      </div>
-    </div>
-  );
-}
-
-/* ─── Ticket document (used in both preview and print portal) ─── */
-function TicketDocument({ tkt }) {
-  return (
-    <div className="ticket-paper">
-      <div className="tkt-header">
-        <div>
-          <div className="tkt-company">PERWAANI</div>
-          <div className="tkt-sub">General Trading &amp; Investment Co. Ltd · Juba Airport Road, South Sudan</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 11, opacity: 0.8 }}>BOARDING PASS</div>
-          <div className="tkt-no">#{tkt.ticketNo}</div>
-        </div>
-      </div>
-      <div className="tkt-route">
-        <div>
-          <div className="tkt-airport">{tkt.from || "—"}</div>
-          <div className="tkt-city">Origin</div>
-        </div>
-        <div className="tkt-arrow">✈ ──────</div>
-        <div>
-          <div className="tkt-airport">{tkt.to || "—"}</div>
-          <div className="tkt-city">Destination</div>
-        </div>
-      </div>
-      <div className="tkt-body">
-        <div className="tkt-row">
-          <div className="tkt-cell"><div className="tkt-cell-label">Passenger</div><div className="tkt-cell-val">{tkt.passengerName || "—"}</div></div>
-          <div className="tkt-cell"><div className="tkt-cell-label">Phone</div><div className="tkt-cell-val">{tkt.phone || "—"}</div></div>
-          <div className="tkt-cell"><div className="tkt-cell-label">Date</div><div className="tkt-cell-val">{tkt.date || "—"}</div></div>
-        </div>
-        <div className="tkt-row">
-          <div className="tkt-cell"><div className="tkt-cell-label">Flight</div><div className="tkt-cell-val">{tkt.flightNo || "—"}</div></div>
-          <div className="tkt-cell"><div className="tkt-cell-label">Departure</div><div className="tkt-cell-val">{tkt.departureTime || "—"}</div></div>
-          <div className="tkt-cell"><div className="tkt-cell-label">Arrival</div><div className="tkt-cell-val">{tkt.arrivalTime || "—"}</div></div>
-        </div>
-      </div>
-      <div className="tkt-amount">
-        <div><div className="tkt-amount-label">SERVICE FEE</div></div>
-        <div className="tkt-amount-val">SSP {fmt(tkt.fees)}</div>
-      </div>
-      <div className="tkt-footer">
-        Perwaani General Trading &amp; Investment Co. Ltd · +211 (0) 920 000 149 · perwaani2023@gmail.com
-      </div>
-    </div>
-  );
-}
 
 /* ══════════════════════════════════════════════
    DASHBOARD
@@ -737,7 +658,6 @@ function Ticketing({ data, setData, toast }) {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState(null);
-  const [printTkt, setPrintTkt] = useState(null);  // ticket currently in the print portal
   const nextTicket = 117 + data.length;
 
   const emptyForm = { ticketNo: nextTicket, date: today(), passengerName: "", phone: "", fees: "", weightKg: "", checkInTime: "", departureTime: "", arrivalTime: "", from: "", to: "", flightNo: "", paymentStatus: "Paid", remarks: "" };
@@ -770,11 +690,7 @@ function Ticketing({ data, setData, toast }) {
   };
 
   // ── FIX: render ticket into print portal, then call window.print() ──
-  const handlePrint = (r) => {
-    setPrintTkt(r);
-    // Let React render the portal content before triggering print
-    setTimeout(() => window.print(), 150);
-  };
+  const handlePrint = (r) => printInNewWindow(buildTicketHTML(r));
 
   const openEdit = (r) => { setForm(r); setEditing(r.id); setShowForm(true); setErrors({}); };
   const filtered = data.filter(r =>
@@ -848,12 +764,7 @@ function Ticketing({ data, setData, toast }) {
         )}
 
       {/* Ticket print portal — renders directly into <body> */}
-      {printTkt && (
-        <PrintPortal onAfterPrint={() => setPrintTkt(null)}>
-          <TicketDocument tkt={printTkt} />
-        </PrintPortal>
-      )}
-
+      
       {showForm && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal">
@@ -1083,7 +994,6 @@ function Invoice({ cargo, tickets, bookings, toast }) {
     invDate: today(), dueDate: "", taxPct: 0,
   });
   const [preview, setPreview] = useState(null);
-  const [printData, setPrintData] = useState(null);   // what goes into the print portal
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const allRecords = { cargo, tickets, bookings };
@@ -1124,12 +1034,7 @@ function Invoice({ cargo, tickets, bookings, toast }) {
     toast("Invoice generated ✓", "success");
   };
 
-  // ── FIX: render invoice into print portal, then call window.print() ──
-  const handlePrint = () => {
-    if (!preview) return;
-    setPrintData(preview);
-    setTimeout(() => window.print(), 150);
-  };
+  const handlePrint = () => { if (preview) printInNewWindow(buildInvoiceHTML(preview)); };
 
   return (
     <div>
@@ -1183,12 +1088,7 @@ function Invoice({ cargo, tickets, bookings, toast }) {
       </div>
 
       {/* Invoice print portal — renders directly into <body> */}
-      {printData && (
-        <PrintPortal onAfterPrint={() => setPrintData(null)}>
-          <InvoiceDocument preview={printData} />
-        </PrintPortal>
-      )}
-    </div>
+          </div>
   );
 }
 
