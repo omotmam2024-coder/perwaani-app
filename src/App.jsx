@@ -1072,8 +1072,27 @@ function Invoice({ cargo, tickets, bookings, toast }) {
 
         {preview ? (
           <div style={{ overflowY: "auto" }}>
-            {/* Screen preview — normal DOM, no portal */}
-            <InvoiceDocument preview={preview} />
+            {/* Screen preview */}
+            <div className="invoice-paper">
+              <div className="inv-header">
+                <div><div className="inv-company-name">PERWAANI</div><div style={{ fontWeight: 700, fontSize: 13, color: "#333" }}>General Trading &amp; Investment Co. Ltd</div><div className="inv-address">Juba Airport Road, South Sudan<br />perwaani2023@gmail.com · +211 (0) 920 000 149</div></div>
+                <div style={{ textAlign: "right" }}><div style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase" }}>Invoice</div><div className="inv-no">{preview.invNo}</div><div className="inv-label">Date</div><div className="inv-val">{preview.invDate}</div>{preview.dueDate && <><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}</div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20, paddingBottom: 16, borderBottom: "1px solid #eee" }}>
+                <div><div className="inv-label">Bill To</div><div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, color: "#111" }}>{preview.bill.name}</div><div style={{ fontSize: 12, color: "#555" }}>{preview.bill.phone}</div><div style={{ fontSize: 12, color: "#555" }}>{preview.bill.route}</div></div>
+                <div><div className="inv-label">Payment Details</div><div style={{ fontSize: 12, marginTop: 4, color: "#333" }}><span style={{ color: "#888" }}>Method: </span>Cash / Mobile Money</div><div style={{ fontSize: 12, color: "#333" }}><span style={{ color: "#888" }}>Ref: </span>{preview.invNo}</div></div>
+              </div>
+              <table className="inv-table">
+                <thead><tr><th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price (SSP)</th><th>Qty</th><th style={{ textAlign: "right" }}>Amount (SSP)</th></tr></thead>
+                <tbody>{preview.lines.map((l, i) => (<tr key={i}><td>{i + 1}</td><td>{l.desc || "—"}</td><td>{l.date || "—"}</td><td>{l.wt || "—"}</td><td>{fmt(l.unitPrice)}</td><td>{l.qty || 1}</td><td style={{ textAlign: "right", fontWeight: 600 }}>{fmt(l.amount)}</td></tr>))}</tbody>
+                <tfoot>
+                  <tr><td colSpan={6} style={{ textAlign: "right", color: "#555" }}>Subtotal</td><td style={{ textAlign: "right" }}>{fmt(preview.subtotal)}</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "right", color: "#555" }}>Tax ({preview.taxPct}%)</td><td style={{ textAlign: "right" }}>{fmt(preview.tax)}</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "right", fontWeight: 700 }}>GRAND TOTAL (SSP)</td><td style={{ textAlign: "right", fontWeight: 800, color: "#c48b00" }}>{fmt(preview.grand)}</td></tr>
+                </tfoot>
+              </table>
+              <div className="inv-footer">Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br />This invoice is official proof of payment. Payment due within 30 days.</div>
+            </div>
             <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
               <button className="btn btn-primary" onClick={handlePrint}>
                 <Icon name="print" size={15} />Print Invoice
