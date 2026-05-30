@@ -90,14 +90,24 @@ function printInNewWindow(htmlContent) {
     alert("Please allow pop-ups for this site to enable printing.");
     return;
   }
+  win.document.open();
   win.document.write(
-    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/><title>Perwaani Print</title><style>" +
-    PRINT_STYLES +
-    "</style></head><body>" +
+    "<!DOCTYPE html><html><head><meta charset=\"utf-8\"/>" +
+    "<title>Perwaani Print</title>" +
+    "<style>" + PRINT_STYLES + "</style>" +
+    "</head><body>" +
     htmlContent +
-    "<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<script></body></html>"
+    "</body></html>"
   );
   win.document.close();
+  // Use focus + setTimeout as the most reliable cross-browser trigger.
+  // document.write() is synchronous so the DOM is ready immediately after close().
+  win.focus();
+  setTimeout(function() {
+    win.print();
+    // Don't auto-close — let the user dismiss the print dialog naturally.
+    // Some browsers close the dialog if the window closes too soon.
+  }, 400);
 }
 
 function buildInvoiceHTML(preview) {
