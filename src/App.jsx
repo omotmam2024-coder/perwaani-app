@@ -95,7 +95,7 @@ function printInNewWindow(htmlContent) {
     PRINT_STYLES +
     "</style></head><body>" +
     htmlContent +
-    "<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<\/script></body></html>"
+    "<script>window.onload=function(){window.print();setTimeout(function(){window.close();},500);};<script></body></html>"
   );
   win.document.close();
 }
