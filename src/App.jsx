@@ -230,7 +230,7 @@ function UserManagement({ session, toast }) {
   const [errors, setErrors]   = useState({});
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*&order=created_at.desc`, {
@@ -239,9 +239,10 @@ function UserManagement({ session, toast }) {
       setUsers(await res.json());
     } catch(e) { toast("Failed to load users","error"); }
     setLoading(false);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[session.token]);
 
-  useEffect(()=>{ loadUsers(); },[]);
+  useEffect(()=>{ loadUsers(); },[loadUsers]);
 
   const validate = () => {
     const e = {};
@@ -607,7 +608,7 @@ function GlobalSearch({ onNavigate }) {
     setLoading(true);
     Promise.all([sb.select("cargo",dq).then(r=>r.map(fromDB.cargo)).catch(()=>[]),sb.select("tickets",dq).then(r=>r.map(fromDB.tickets)).catch(()=>[]),sb.select("bookings",dq).then(r=>r.map(fromDB.bookings)).catch(()=>[])]).then(([c,t,b])=>{setResults({cargo:c.slice(0,5),tickets:t.slice(0,5),bookings:b.slice(0,5)});setOpen(true);}).finally(()=>setLoading(false));
   },[dq]);
-  useEffect(()=>{const h=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
+  useEffect(()=>{const h=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);// eslint-disable-line react-hooks/exhaustive-deps
   const total=results?results.cargo.length+results.tickets.length+results.bookings.length:0;
   const go=page=>{onNavigate(page);setQuery("");setResults(null);setOpen(false);};
   return (
@@ -789,7 +790,7 @@ export default function App() {
       sb.select("bookings").then(r=>r.map(fromDB.bookings)),
     ]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);})
     .catch(e=>{setDbError(e.message);setLoading(false);});
-  },[session]);
+  },[session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show login if not authenticated
   if (!session) return <LoginScreen onLogin={handleLogin}/>;
