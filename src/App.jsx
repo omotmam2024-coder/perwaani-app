@@ -42,6 +42,43 @@ const sb = {
   },
 };
 
+/* ══════════════════════════════════════════════
+   AUTH HELPERS  (Supabase Auth REST API)
+══════════════════════════════════════════════ */
+const auth = {
+  async signIn(email, password) {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "apikey": SUPABASE_KEY },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error_description || data.msg || "Login failed");
+    return data; // { access_token, user, ... }
+  },
+  async signOut(token) {
+    await fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: "POST",
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
+    });
+  },
+  async getUser(token) {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return res.json();
+  },
+};
+
+// Get stored session
+function getSession() {
+  try { return JSON.parse(localStorage.getItem("pw_session") || "null"); } catch { return null; }
+}
+function saveSession(s) { localStorage.setItem("pw_session", JSON.stringify(s)); }
+function clearSession() { localStorage.removeItem("pw_session"); }
+
+
 const fromDB = {
   cargo: r => ({ id:r.id, receivingDate:r.receiving_date, description:r.description, unitKg:r.unit_kg, unitPrice:r.unit_price, qty:r.qty, spec:r.spec, senderName:r.sender_name, senderLocation:r.sender_location, senderContact:r.sender_contact, receiverName:r.receiver_name, receiverLocation:r.receiver_location, receiverContact:r.receiver_contact, paymentMethod:r.payment_method, amount:r.amount }),
   tickets: r => ({ id:r.id, ticketNo:r.ticket_no, date:r.date, passengerName:r.passenger_name, phone:r.phone, fees:r.fees, weightKg:r.weight_kg, checkInTime:r.check_in_time, departureTime:r.departure_time, arrivalTime:r.arrival_time, from:r.from_location, to:r.to_location, flightNo:r.flight_no, paymentStatus:r.payment_status, remarks:r.remarks }),
@@ -62,6 +99,31 @@ function useDebounce(value, delay=350) {
   useEffect(() => { const t=setTimeout(()=>setDv(value),delay); return ()=>clearTimeout(t); }, [value,delay]);
   return dv;
 }
+
+
+/* ══════════════════════════════════════════════
+   AUTH CSS
+══════════════════════════════════════════════ */
+const AUTH_CSS = `
+  .auth-bg{min-height:100vh;background:#0d1117;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Sora',sans-serif}
+  .auth-card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
+  .auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+  .auth-logo-icon{width:44px;height:44px;background:linear-gradient(135deg,#f0a500,#e05c00);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#000}
+  .auth-logo-name{font-size:20px;font-weight:800;color:#f0a500}
+  .auth-logo-sub{font-size:11px;color:#8b949e}
+  .auth-title{font-size:22px;font-weight:700;color:#e6edf3;margin-bottom:6px}
+  .auth-sub{font-size:13px;color:#8b949e;margin-bottom:24px}
+  .auth-field{margin-bottom:16px}
+  .auth-label{font-size:12px;font-weight:600;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px}
+  .auth-input{width:100%;background:#1c2230;border:1px solid #30363d;border-radius:8px;color:#e6edf3;padding:11px 14px;font-family:'Sora',sans-serif;font-size:14px;outline:none;transition:border 0.15s;box-sizing:border-box}
+  .auth-input:focus{border-color:#f0a500;box-shadow:0 0 0 3px rgba(240,165,0,0.1)}
+  .auth-btn{width:100%;background:#f0a500;color:#000;border:none;border-radius:8px;padding:12px;font-family:'Sora',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px;transition:background 0.15s;display:flex;align-items:center;justify-content:center;gap:8px}
+  .auth-btn:hover:not(:disabled){background:#f5b800}
+  .auth-btn:disabled{opacity:0.6;cursor:not-allowed}
+  .auth-error{background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#f85149;margin-bottom:16px}
+  .auth-footer{text-align:center;margin-top:20px;font-size:12px;color:#8b949e}
+  @media(max-width:480px){.auth-card{padding:24px 18px;border-radius:12px}}
+`;
 
 /* ══════════════════════════════════════════════
    PRINT SYSTEM
@@ -87,6 +149,227 @@ function buildTicketHTML(t) {
   return `<div class="ticket-paper"><div class="tkt-header"><div><div class="tkt-company">PERWAANI</div><div class="tkt-sub">General Trading &amp; Investment Co. Ltd &middot; Juba Airport Road, South Sudan</div></div><div style="text-align:right"><div style="font-size:11px;opacity:0.8">BOARDING PASS</div><div class="tkt-no">#${t.ticketNo}</div></div></div><div class="tkt-route"><div><div class="tkt-airport">${t.from||"—"}</div><div class="tkt-city">Origin</div></div><div class="tkt-arrow">&#9992; &#8212;&#8212;&#8212;&#8212;&#8212;</div><div><div class="tkt-airport">${t.to||"—"}</div><div class="tkt-city">Destination</div></div></div><div class="tkt-body"><div class="tkt-row"><div class="tkt-cell"><div class="tkt-cell-label">Passenger</div><div class="tkt-cell-val">${t.passengerName||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Phone</div><div class="tkt-cell-val">${t.phone||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Date</div><div class="tkt-cell-val">${t.date||"—"}</div></div></div><div class="tkt-row"><div class="tkt-cell"><div class="tkt-cell-label">Flight</div><div class="tkt-cell-val">${t.flightNo||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Departure</div><div class="tkt-cell-val">${t.departureTime||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Arrival</div><div class="tkt-cell-val">${t.arrivalTime||"—"}</div></div></div></div><div class="tkt-amount"><div><div class="tkt-amount-label">SERVICE FEE</div></div><div class="tkt-amount-val">SSP ${fmt(t.fees)}</div></div><div class="tkt-footer">Perwaani General Trading &amp; Investment Co. Ltd &middot; +211 (0) 920 000 149 &middot; perwaani2023@gmail.com</div></div>`;
 }
 
+
+/* ══════════════════════════════════════════════
+   LOGIN SCREEN
+══════════════════════════════════════════════ */
+function LoginScreen({ onLogin }) {
+  const [email, setEmail]     = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+  const [showPw, setShowPw]   = useState(false);
+
+  const submit = async (e) => {
+    e && e.preventDefault();
+    if (!email.trim() || !password) { setError("Email and password are required."); return; }
+    setLoading(true); setError("");
+    try {
+      const session = await auth.signIn(email.trim(), password);
+      // Fetch role from app_users table
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?auth_id=eq.${session.user.id}&select=role,full_name`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${session.access_token}` },
+      });
+      const users = await res.json();
+      const role = users[0]?.role || "viewer";
+      const fullName = users[0]?.full_name || session.user.email;
+      const s = { token: session.access_token, userId: session.user.id, email: session.user.email, fullName, role };
+      saveSession(s);
+      onLogin(s);
+    } catch (err) {
+      setError(err.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <>
+      <style>{AUTH_CSS}</style>
+      <div className="auth-bg">
+        <div className="auth-card">
+          <div className="auth-logo">
+            <div className="auth-logo-icon">PW</div>
+            <div><div className="auth-logo-name">PERWAANI</div><div className="auth-logo-sub">General Trading &amp; Investment Co. Ltd</div></div>
+          </div>
+          <div className="auth-title">Welcome back</div>
+          <div className="auth-sub">Sign in to access the operations system</div>
+          {error && <div className="auth-error">{error}</div>}
+          <div className="auth-field">
+            <label className="auth-label">Email Address</label>
+            <input className="auth-input" type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+          </div>
+          <div className="auth-field">
+            <label className="auth-label">Password</label>
+            <div style={{position:"relative"}}>
+              <input className="auth-input" type={showPw?"text":"password"} placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} style={{paddingRight:44}}/>
+              <button onClick={()=>setShowPw(p=>!p)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#8b949e",cursor:"pointer",fontSize:12,padding:4}}>
+                {showPw?"Hide":"Show"}
+              </button>
+            </div>
+          </div>
+          <button className="auth-btn" onClick={submit} disabled={loading}>
+            {loading ? <span style={{display:"inline-block",width:16,height:16,border:"2px solid #000",borderTopColor:"transparent",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/> : null}
+            {loading ? "Signing in…" : "Sign In"}
+          </button>
+          <div className="auth-footer">Contact your administrator to get access.</div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ══════════════════════════════════════════════
+   USER MANAGEMENT  (Admin only)
+══════════════════════════════════════════════ */
+function UserManagement({ session, toast }) {
+  const [users, setUsers]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [form, setForm]       = useState({ email:"", full_name:"", password:"", role:"staff" });
+  const [errors, setErrors]   = useState({});
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*&order=created_at.desc`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${session.token}` },
+      });
+      setUsers(await res.json());
+    } catch(e) { toast("Failed to load users","error"); }
+    setLoading(false);
+  };
+
+  useEffect(()=>{ loadUsers(); },[]);
+
+  const validate = () => {
+    const e = {};
+    if (!form.email.trim()) e.email = "Required";
+    if (!form.full_name.trim()) e.full_name = "Required";
+    if (!form.password || form.password.length < 6) e.password = "Min 6 characters";
+    setErrors(e); return Object.keys(e).length === 0;
+  };
+
+  const createUser = async () => {
+    if (!validate()) return;
+    setSaving(true);
+    try {
+      // 1. Create Supabase Auth user via admin endpoint
+      const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+        method: "POST",
+        headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${session.token}` },
+        body: JSON.stringify({ email: form.email, password: form.password, email_confirm: true }),
+      });
+      const authData = await authRes.json();
+      if (!authRes.ok) throw new Error(authData.msg || authData.message || "Failed to create auth user");
+      // 2. Insert into app_users with role
+      await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
+        method: "POST",
+        headers: { ...{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`}, "Prefer":"return=representation" },
+        body: JSON.stringify({ auth_id: authData.id, email: form.email, full_name: form.full_name, role: form.role }),
+      });
+      toast("User created ✓","success");
+      setShowForm(false);
+      setForm({ email:"", full_name:"", password:"", role:"staff" });
+      loadUsers();
+    } catch(e) { toast("Error: "+e.message,"error"); }
+    setSaving(false);
+  };
+
+  const changeRole = async (userId, newRole) => {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}` },
+        body: JSON.stringify({ role: newRole }),
+      });
+      setUsers(u => u.map(x => x.id===userId ? {...x, role:newRole} : x));
+      toast("Role updated ✓","success");
+    } catch(e) { toast("Failed: "+e.message,"error"); }
+  };
+
+  const deleteUser = async (u) => {
+    if (u.auth_id === session.userId) { toast("Cannot delete yourself","error"); return; }
+    if (!window.confirm(`Delete user ${u.email}?`)) return;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${u.id}`, {
+        method: "DELETE", headers: {"apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`},
+      });
+      toast("User deleted","error");
+      loadUsers();
+    } catch(e) { toast("Failed: "+e.message,"error"); }
+  };
+
+  const roleColor = r => r==="admin"?"badge-red":r==="manager"?"badge-purple":r==="staff"?"badge-blue":"badge-muted";
+  const roleLabel = r => r==="admin"?"Admin":r==="manager"?"Manager":r==="staff"?"Staff":"Viewer";
+
+  return (
+    <div>
+      <div className="section-header">
+        <div><div className="section-title">User Management</div><div style={{fontSize:12,color:"var(--muted)"}}>{users.length} users · Admin only</div></div>
+        <button className="btn btn-primary" onClick={()=>setShowForm(true)}><Icon name="plus" size={15}/>Add User</button>
+      </div>
+      {loading ? <div className="card" style={{textAlign:"center",padding:40}}><span className="spinner"/></div> : (
+        <div className="card">
+          <div className="table-wrap"><table>
+            <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Change Role</th><th>Actions</th></tr></thead>
+            <tbody>
+              {users.map(u=>(
+                <tr key={u.id}>
+                  <td style={{fontWeight:600}}>{u.full_name||"—"}{u.auth_id===session.userId&&<span className="badge badge-green" style={{marginLeft:6,fontSize:9}}>You</span>}</td>
+                  <td style={{fontSize:12,color:"var(--muted)"}}>{u.email}</td>
+                  <td><span className={`badge ${roleColor(u.role)}`}>{roleLabel(u.role)}</span></td>
+                  <td>
+                    <select className="form-select" style={{padding:"4px 8px",fontSize:12,width:"auto"}} value={u.role}
+                      onChange={e=>changeRole(u.id,e.target.value)}
+                      disabled={u.auth_id===session.userId}>
+                      {["admin","manager","staff","viewer"].map(r=><option key={r} value={r}>{r.charAt(0).toUpperCase()+r.slice(1)}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <button className="btn btn-danger btn-sm" onClick={()=>deleteUser(u)} disabled={u.auth_id===session.userId}><Icon name="trash" size={13}/></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table></div>
+          <div style={{marginTop:16,padding:"12px 16px",background:"var(--surface2)",borderRadius:8,fontSize:12,color:"var(--muted)",lineHeight:1.8}}>
+            <strong style={{color:"var(--text)"}}>Role permissions:</strong><br/>
+            🔴 <strong>Admin</strong> — Full access: view, create, edit, delete + user management<br/>
+            🟣 <strong>Manager</strong> — View, create, edit all records. Cannot delete or manage users<br/>
+            🔵 <strong>Staff</strong> — View and create records only. Cannot edit or delete<br/>
+            ⚫ <strong>Viewer</strong> — Read-only access to all pages
+          </div>
+        </div>
+      )}
+      {showForm && (
+        <div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
+          <div className="modal" style={{maxWidth:480}}>
+            <div className="modal-header"><div className="modal-title">Add New User</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div>
+            <div className="modal-body">
+              <div className="form-grid" style={{gridTemplateColumns:"1fr"}}>
+                <div className="form-group"><label className="form-label">Full Name *</label><input className={`form-input${errors.full_name?" error":""}`} value={form.full_name} onChange={e=>set("full_name",e.target.value)} placeholder="John Doe"/>{errors.full_name&&<span className="form-error">{errors.full_name}</span>}</div>
+                <div className="form-group"><label className="form-label">Email *</label><input type="email" className={`form-input${errors.email?" error":""}`} value={form.email} onChange={e=>set("email",e.target.value)} placeholder="user@example.com"/>{errors.email&&<span className="form-error">{errors.email}</span>}</div>
+                <div className="form-group"><label className="form-label">Password *</label><input type="password" className={`form-input${errors.password?" error":""}`} value={form.password} onChange={e=>set("password",e.target.value)} placeholder="Min 6 characters"/>{errors.password&&<span className="form-error">{errors.password}</span>}</div>
+                <div className="form-group"><label className="form-label">Role</label>
+                  <select className="form-select" value={form.role} onChange={e=>set("role",e.target.value)}>
+                    <option value="admin">Admin — Full access</option>
+                    <option value="manager">Manager — View, create, edit</option>
+                    <option value="staff">Staff — View and create</option>
+                    <option value="viewer">Viewer — Read only</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={createUser} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}Create User</button></div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════
    ICONS
 ══════════════════════════════════════════════ */
@@ -110,6 +393,9 @@ const Icon = ({ name, size=20 }) => {
     check:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>,
     db:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
     alert:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
+    logout:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+    users:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+    shield:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
   };
   return icons[name] || null;
 };
@@ -372,7 +658,7 @@ function Dashboard({ cargo, tickets, bookings }) {
   );
 }
 
-function CargoRegister({ data, setData, toast }) {
+function CargoRegister({ data, setData, toast, can }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
   const emptyForm={receivingDate:today(),description:"",unitKg:"",unitPrice:"",qty:"",spec:"",senderName:"",senderLocation:"",senderContact:"",receiverName:"",receiverLocation:"",receiverContact:"",paymentMethod:"Cash",amount:""};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
@@ -386,13 +672,13 @@ function CargoRegister({ data, setData, toast }) {
   return (
     <div>
       <div className="section-header"><div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:200}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4}}>{can("edit")&&<button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button>}{can("delete")&&<button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button>}</div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div><div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className="form-input" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div><div className="form-group"><label className="form-label">Qty</label><input type="number" className="form-input" value={form.qty} onChange={e=>set("qty",e.target.value)}/></div><div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div><div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className="form-input" value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div><div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className="form-input" value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (SSP)</label><input type="number" className="form-input" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div></div></div>)}
     </div>
   );
 }
 
-function Ticketing({ data, setData, toast }) {
+function Ticketing({ data, setData, toast, can }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
   const nextTicket=117+data.length;
   const emptyForm={ticketNo:nextTicket,date:today(),passengerName:"",phone:"",fees:"",weightKg:"",checkInTime:"",departureTime:"",arrivalTime:"",from:"",to:"",flightNo:"",paymentStatus:"Paid",remarks:""};
@@ -408,13 +694,13 @@ function Ticketing({ data, setData, toast }) {
   return (
     <div>
       <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · SSP {fmt(totalFees)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:nextTicket});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (SSP)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>{fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)}><Icon name="print" size={13}/></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>{fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (SSP)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>{fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)}><Icon name="print" size={13}/></button>{can("edit")&&<button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button>}{can("delete")&&<button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button>}</div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>{fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid">{[{k:"ticketNo",l:"Ticket No.",t:"number"},{k:"date",l:"Date",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (SSP)",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}<div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div></div></div>)}
     </div>
   );
 }
 
-function Bookings({ data, setData, toast }) {
+function Bookings({ data, setData, toast, can }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
   const emptyForm={bookingDate:today(),passengerName:"",phone:"",idPassport:"",from:"",to:"",flightNo:"",departureDate:"",departureTime:"",seatClass:"Economy",luggageKg:"",fare:"",taxes:"",status:"Booked"};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
@@ -428,7 +714,7 @@ function Bookings({ data, setData, toast }) {
   return (
     <div>
       <div className="section-header"><div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · SSP {fmt(totalRev)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total (SSP)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">{fmt(r.fare)}</td><td className="mono">{fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>{fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total (SSP)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">{fmt(r.fare)}</td><td className="mono">{fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4}}>{can("edit")&&<button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button>}{can("delete")&&<button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button>}</div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>{fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Fare (SSP)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div><div className="form-group"><label className="form-label">Taxes (SSP)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div><div className="form-group"><label className="form-label">Total (SSP)</label><input type="number" className="form-input" value={form.total||""} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
     </div>
   );
@@ -468,41 +754,131 @@ function Reports({ cargo, tickets, bookings }) {
 }
 
 export default function App() {
-  const [page,setPage]=useState("dashboard"),[sideOpen,setSideOpen]=useState(true);
-  const [cargo,setCargo]=useState([]),[tickets,setTickets]=useState([]),[bookings,setBookings]=useState([]);
-  const [loading,setLoading]=useState(true),[dbError,setDbError]=useState(null);
-  const [toast,setToast]=useState(null);
+  const [session, setSession] = useState(()=>getSession());
+  const [page,setPage]        = useState("dashboard");
+  const [sideOpen,setSideOpen]= useState(true);
+  const [cargo,setCargo]      = useState([]);
+  const [tickets,setTickets]  = useState([]);
+  const [bookings,setBookings]= useState([]);
+  const [loading,setLoading]  = useState(true);
+  const [dbError,setDbError]  = useState(null);
+  const [toast,setToast]      = useState(null);
+  const showToast = useCallback((msg,type="success")=>setToast({msg,type}),[]);
+
+  // Role-based permission helper
+  const can = (action) => {
+    const r = session?.role;
+    if (r==="admin")   return true;
+    if (r==="manager") return action!=="delete" && action!=="manage_users";
+    if (r==="staff")   return action==="view" || action==="create";
+    return action==="view"; // viewer
+  };
+
+  const handleLogin = (s) => { setSession(s); };
+  const handleLogout = async () => {
+    if (session?.token) await auth.signOut(session.token).catch(()=>{});
+    clearSession(); setSession(null);
+  };
 
   useEffect(()=>{
-    Promise.all([sb.select("cargo").then(r=>r.map(fromDB.cargo)),sb.select("tickets").then(r=>r.map(fromDB.tickets)),sb.select("bookings").then(r=>r.map(fromDB.bookings))]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);}).catch(e=>{setDbError(e.message);setLoading(false);});
-  },[]);
+    if (!session) return;
+    setLoading(true);
+    Promise.all([
+      sb.select("cargo").then(r=>r.map(fromDB.cargo)),
+      sb.select("tickets").then(r=>r.map(fromDB.tickets)),
+      sb.select("bookings").then(r=>r.map(fromDB.bookings)),
+    ]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);})
+    .catch(e=>{setDbError(e.message);setLoading(false);});
+  },[session]);
 
-  const showToast=useCallback((msg,type="success")=>setToast({msg,type}),[]);
-  const nav=[{id:"dashboard",label:"Dashboard",icon:"dashboard"},{id:"cargo",label:"Cargo Register",icon:"cargo"},{id:"ticketing",label:"Ticketing",icon:"ticket"},{id:"bookings",label:"Bookings",icon:"booking"},{id:"invoice",label:"Invoice",icon:"invoice"},{id:"reports",label:"Reports",icon:"report"}];
-  const titles={dashboard:"Operations Dashboard",cargo:"Cargo Register",ticketing:"Ticketing",bookings:"Bookings",invoice:"Invoice",reports:"Monthly Reports"};
+  // Show login if not authenticated
+  if (!session) return <LoginScreen onLogin={handleLogin}/>;
+
+  const isAdmin   = session.role==="admin";
+  const roleColor = session.role==="admin"?"badge-red":session.role==="manager"?"badge-purple":"badge-blue";
+
+  const allNav=[
+    {id:"dashboard",label:"Dashboard",icon:"dashboard"},
+    {id:"cargo",    label:"Cargo Register",icon:"cargo"},
+    {id:"ticketing",label:"Ticketing",     icon:"ticket"},
+    {id:"bookings", label:"Bookings",      icon:"booking"},
+    {id:"invoice",  label:"Invoice",       icon:"invoice"},
+    {id:"reports",  label:"Reports",       icon:"report"},
+    ...(isAdmin?[{id:"users",label:"User Management",icon:"users"}]:[]),
+  ];
+  const titles={dashboard:"Operations Dashboard",cargo:"Cargo Register",ticketing:"Ticketing",bookings:"Bookings",invoice:"Invoice",reports:"Monthly Reports",users:"User Management"};
 
   return (
     <>
       <style>{CSS}</style>
       <div className="app">
-        {/* Mobile overlay – tap to close sidebar */}
         <div className={`sidebar-overlay ${sideOpen?"visible":""}`} onClick={()=>setSideOpen(false)}/>
         <div className={`sidebar ${sideOpen?"open":"collapsed"}`}>
-          <div className="sidebar-logo"><div className="logo-icon">PW</div>{sideOpen&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}</div>
+          <div className="sidebar-logo">
+            <div className="logo-icon">PW</div>
+            {sideOpen&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}
+          </div>
           <nav className="nav">
             {sideOpen&&<div className="nav-section">Main Menu</div>}
-            {nav.map(n=>(<div key={n.id} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>{setPage(n.id);if(window.innerWidth<=768)setSideOpen(false);}}><span className="icon"><Icon name={n.icon} size={18}/></span>{sideOpen&&<span>{n.label}</span>}</div>))}
+            {allNav.map(n=>(<div key={n.id} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>{setPage(n.id);if(window.innerWidth<=768)setSideOpen(false);}}><span className="icon"><Icon name={n.icon} size={18}/></span>{sideOpen&&<span>{n.label}</span>}</div>))}
           </nav>
-          {sideOpen&&<div className="sidebar-footer"><div>Juba Airport Road, South Sudan</div><div><a href="mailto:perwaani2023@gmail.com">perwaani2023@gmail.com</a></div></div>}
+          {sideOpen&&(
+            <div className="sidebar-footer">
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 4px",background:"var(--surface2)",borderRadius:8}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#000",flexShrink:0}}>
+                  {(session.fullName||session.email||"U")[0].toUpperCase()}
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:600,color:"var(--text)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{session.fullName||session.email}</div>
+                  <span className={`badge ${roleColor}`} style={{fontSize:10,padding:"1px 6px"}}>{session.role}</span>
+                </div>
+              </div>
+              <button className="btn btn-ghost btn-sm" style={{width:"100%",justifyContent:"center",marginTop:4}} onClick={handleLogout}>
+                <Icon name="logout" size={14}/>Sign Out
+              </button>
+              <div style={{marginTop:8}}>Juba Airport Road, South Sudan</div>
+            </div>
+          )}
         </div>
+
         <div className="main">
           <div className="topbar">
-            <div className="topbar-left"><button className="btn btn-ghost btn-sm" onClick={()=>setSideOpen(p=>!p)} style={{padding:"6px 8px"}}><Icon name="menu" size={18}/></button><div><div className="page-title">{titles[page]}</div><div className="page-sub">Perwaani General Trading &amp; Investment Co. Ltd</div></div></div>
+            <div className="topbar-left">
+              <button className="btn btn-ghost btn-sm" onClick={()=>setSideOpen(p=>!p)} style={{padding:"6px 8px"}}><Icon name="menu" size={18}/></button>
+              <div><div className="page-title">{titles[page]||page}</div><div className="page-sub">Perwaani General Trading &amp; Investment Co. Ltd</div></div>
+            </div>
             <div className="topbar-center"><GlobalSearch onNavigate={setPage}/></div>
-            <div className="topbar-right"><span className={`badge ${dbError?"badge-red":"badge-green"}`}><Icon name={dbError?"alert":"db"} size={12}/>{dbError?"DB Error":"Supabase"}</span><span style={{fontSize:12,color:"var(--muted)"}}>{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span></div>
+            <div className="topbar-right">
+              <span className={`badge ${roleColor}`} style={{display:"flex",alignItems:"center",gap:4}}><Icon name="shield" size={11}/>{session.role}</span>
+              <span className={`badge ${dbError?"badge-red":"badge-green"}`}><Icon name={dbError?"alert":"db"} size={12}/>{dbError?"DB Error":"Live"}</span>
+              <span style={{fontSize:12,color:"var(--muted)"}}>{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span>
+            </div>
           </div>
+
           <div className="content">
-            {loading?(<div style={{textAlign:"center",padding:"80px 20px",color:"var(--muted)"}}><span className="spinner" style={{width:28,height:28,borderWidth:3}}/><div style={{marginTop:12,fontSize:14}}>Loading from Supabase…</div></div>):dbError?(<div style={{maxWidth:600,margin:"40px auto"}}><div className="card" style={{borderColor:"var(--red)",background:"rgba(248,81,73,0.04)"}}><div style={{fontWeight:700,color:"var(--red)",marginBottom:10,fontSize:15}}>⚠ Database Connection Error</div><div style={{fontSize:13,color:"var(--muted)",marginBottom:20,background:"var(--surface2)",padding:"10px 14px",borderRadius:8,fontFamily:"monospace"}}>{dbError}</div><div style={{fontSize:13,lineHeight:2.0}}><strong style={{color:"var(--text)"}}>Setup steps:</strong><br/>1. Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{color:"var(--blue)"}}>supabase.com</a> → create a free project<br/>2. Run <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>supabase_setup.sql</code> in the SQL Editor<br/>3. Copy your Project URL &amp; anon key from Settings → API<br/>4. Replace <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>SUPABASE_URL</code> and <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>SUPABASE_KEY</code> at the top of App.jsx<br/>5. Redeploy to Vercel</div></div></div>):(<>{page==="dashboard"&&<Dashboard cargo={cargo} tickets={tickets} bookings={bookings}/>}{page==="cargo"&&<CargoRegister data={cargo} setData={setCargo} toast={showToast}/>}{page==="ticketing"&&<Ticketing data={tickets} setData={setTickets} toast={showToast}/>}{page==="bookings"&&<Bookings data={bookings} setData={setBookings} toast={showToast}/>}{page==="invoice"&&<Invoice cargo={cargo} tickets={tickets} bookings={bookings} toast={showToast}/>}{page==="reports"&&<Reports cargo={cargo} tickets={tickets} bookings={bookings}/>}</>)}
+            {loading?(
+              <div style={{textAlign:"center",padding:"80px 20px",color:"var(--muted)"}}>
+                <span className="spinner" style={{width:28,height:28,borderWidth:3}}/>
+                <div style={{marginTop:12,fontSize:14}}>Loading from Supabase…</div>
+              </div>
+            ):dbError?(
+              <div style={{maxWidth:600,margin:"40px auto"}}>
+                <div className="card" style={{borderColor:"var(--red)",background:"rgba(248,81,73,0.04)"}}>
+                  <div style={{fontWeight:700,color:"var(--red)",marginBottom:10,fontSize:15}}>⚠ Database Connection Error</div>
+                  <div style={{fontSize:13,color:"var(--muted)",marginBottom:16,background:"var(--surface2)",padding:"10px 14px",borderRadius:8,fontFamily:"monospace"}}>{dbError}</div>
+                </div>
+              </div>
+            ):(
+              <>
+                {page==="dashboard" && <Dashboard cargo={cargo} tickets={tickets} bookings={bookings}/>}
+                {page==="cargo"     && <CargoRegister data={cargo}    setData={setCargo}    toast={showToast} can={can}/>}
+                {page==="ticketing" && <Ticketing     data={tickets}  setData={setTickets}  toast={showToast} can={can}/>}
+                {page==="bookings"  && <Bookings      data={bookings} setData={setBookings} toast={showToast} can={can}/>}
+                {page==="invoice"   && <Invoice cargo={cargo} tickets={tickets} bookings={bookings} toast={showToast}/>}
+                {page==="reports"   && <Reports cargo={cargo} tickets={tickets} bookings={bookings}/>}
+                {page==="users"     && isAdmin && <UserManagement session={session} toast={showToast}/>}
+              </>
+            )}
           </div>
         </div>
       </div>
