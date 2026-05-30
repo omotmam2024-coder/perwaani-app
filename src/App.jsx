@@ -1,9 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-// ═══════════════════════════════════════════════════════════════
-//  SUPABASE CONFIG  ← replace these two values with your own
-//  Dashboard → Settings → API → Project URL & anon/public key
-// ═══════════════════════════════════════════════════════════════
 const SUPABASE_URL = "https://gyxyivbxrheyoisermei.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5eHlpdmJ4cmhleW9pc2VybWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTgxNzcsImV4cCI6MjA5NTYzNDE3N30.Tb_ExY6Uua2oVXwE_tl2GpI9phu1nS9RiZlYKOd5n1g";
 
@@ -15,7 +11,6 @@ function sbHeaders() {
   };
 }
 
-// Minimal REST wrapper – no SDK needed
 const sb = {
   async select(table, search = "") {
     let url = `${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc`;
@@ -47,7 +42,6 @@ const sb = {
   },
 };
 
-// DB ↔ App field mappers
 const fromDB = {
   cargo: r => ({ id:r.id, receivingDate:r.receiving_date, description:r.description, unitKg:r.unit_kg, unitPrice:r.unit_price, qty:r.qty, spec:r.spec, senderName:r.sender_name, senderLocation:r.sender_location, senderContact:r.sender_contact, receiverName:r.receiver_name, receiverLocation:r.receiver_location, receiverContact:r.receiver_contact, paymentMethod:r.payment_method, amount:r.amount }),
   tickets: r => ({ id:r.id, ticketNo:r.ticket_no, date:r.date, passengerName:r.passenger_name, phone:r.phone, fees:r.fees, weightKg:r.weight_kg, checkInTime:r.check_in_time, departureTime:r.departure_time, arrivalTime:r.arrival_time, from:r.from_location, to:r.to_location, flightNo:r.flight_no, paymentStatus:r.payment_status, remarks:r.remarks }),
@@ -148,7 +142,6 @@ const CSS = `
   .topbar-center{flex:1;max-width:500px}
   .topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto}
   .page-title{font-size:17px;font-weight:700}.page-sub{font-size:11px;color:var(--muted)}
-  /* ── Global search ── */
   .global-search{position:relative;width:100%}
   .global-search input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:9px 36px 9px 38px;font-family:'Sora',sans-serif;font-size:13px;outline:none;transition:border 0.15s}
   .global-search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(240,165,0,0.1)}
@@ -166,7 +159,6 @@ const CSS = `
   .sr-amt{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
   .sr-empty{padding:24px;text-align:center;color:var(--muted);font-size:13px}
   .sr-divider{border:none;border-top:1px solid var(--border);margin:0}
-  /* ── Buttons ── */
   .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;white-space:nowrap}
   .btn:disabled{opacity:0.6;cursor:not-allowed}
   .btn-primary{background:var(--accent);color:#000}.btn-primary:hover:not(:disabled){background:#f5b800;transform:translateY(-1px)}
@@ -219,8 +211,61 @@ const CSS = `
   .bar-chart{display:flex;align-items:flex-end;gap:8px;height:100px;padding:8px 0}
   .bar{flex:1;border-radius:4px 4px 0 0;transition:all 0.3s;min-width:20px}
   .bar-label{text-align:center;font-size:10px;color:var(--muted);margin-top:4px}
-  @media(max-width:768px){.sidebar{position:fixed;z-index:50;height:100vh}.sidebar:not(.open){transform:translateX(-100%)}.grid-4{grid-template-columns:1fr 1fr}.content{padding:16px}.topbar-center{display:none}}
-  @media(max-width:480px){.grid-4,.grid-2{grid-template-columns:1fr}}
+  /* ── MOBILE OVERLAY (backdrop behind open sidebar) ── */
+  .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:49;backdrop-filter:blur(2px)}
+  /* ── TABLET ── */
+  @media(max-width:900px){.topbar-center{max-width:280px}}
+  /* ── MOBILE ── */
+  @media(max-width:768px){
+    .sidebar{position:fixed;z-index:50;height:100vh;transform:translateX(-100%);transition:transform 0.28s ease;width:240px!important;min-width:240px!important}
+    .sidebar.open{transform:translateX(0)}
+    .sidebar-overlay.visible{display:block}
+    .main{width:100%}
+    .topbar{flex-wrap:wrap;padding:10px 14px;gap:8px}
+    .topbar-left{flex:1;min-width:0}
+    .topbar-center{order:3;flex:0 0 100%;max-width:100%}
+    .topbar-right{flex-shrink:0}
+    .page-title{font-size:15px}
+    .page-sub{display:none}
+    .content{padding:14px}
+    .grid-4{grid-template-columns:1fr 1fr}
+    .grid-2{grid-template-columns:1fr}
+    .kpi-val{font-size:20px}
+    .section-header{flex-direction:column;align-items:flex-start}
+    .section-header>div:last-child{width:100%;display:flex;flex-wrap:wrap;gap:8px}
+    .section-header .search-wrap{width:100%}
+    .section-header .search-wrap input{width:100%!important}
+    .section-header .btn{flex:1;justify-content:center}
+    .overlay{padding:0;align-items:flex-end}
+    .modal{border-radius:16px 16px 0 0;max-height:92vh;width:100%}
+    .modal-body{padding:16px}
+    .modal-header{padding:16px}
+    .modal-footer{padding:12px 16px}
+    .form-grid{grid-template-columns:1fr}
+    .db-banner{padding:10px 12px;gap:8px}
+    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    table{font-size:12px;min-width:500px}
+    thead th{padding:8px;font-size:10px}
+    tbody td{padding:8px}
+    .toast{bottom:16px;right:12px;left:12px;font-size:12px}
+  }
+  /* ── SMALL PHONES ── */
+  @media(max-width:480px){
+    .grid-4{grid-template-columns:1fr}
+    .kpi-val{font-size:18px}
+    .content{padding:10px}
+    .card{padding:14px}
+    .btn{font-size:12px;padding:7px 12px}
+    .btn-sm{padding:4px 8px;font-size:11px}
+  }
+  /* ── PRINT ── */
+  @media print{
+    .sidebar,.topbar,.sidebar-overlay{display:none!important}
+    .main{display:block!important}
+    .content{padding:0!important}
+    body{background:#fff!important}
+    thead th{background:#f5f5f5!important;color:#333!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  }
   ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
   .glow{box-shadow:0 0 20px rgba(240,165,0,0.15)}
   .toast{position:fixed;bottom:24px;right:24px;z-index:999;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;animation:slideUp 0.3s ease}
@@ -268,129 +313,50 @@ const Toast = ({ msg, type, onClose }) => {
   return <div className={`toast ${type}`}><Icon name="check" size={16}/>{msg}</div>;
 };
 
-/* ══════════════════════════════════════════════
-   GLOBAL SEARCH BAR
-   Searches all three Supabase tables via ilike,
-   shows grouped dropdown — click navigates to page.
-══════════════════════════════════════════════ */
 function GlobalSearch({ onNavigate }) {
-  const [query,   setQuery]   = useState("");
-  const [results, setResults] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [open,    setOpen]    = useState(false);
-  const dq      = useDebounce(query, 350);
-  const wrapRef = useRef(null);
-
-  useEffect(() => {
-    if (!dq.trim()) { setResults(null); setOpen(false); return; }
+  const [query,setQuery]=useState(""),[results,setResults]=useState(null),[loading,setLoading]=useState(false),[open,setOpen]=useState(false);
+  const dq=useDebounce(query,350),wrapRef=useRef(null);
+  useEffect(()=>{
+    if(!dq.trim()){setResults(null);setOpen(false);return;}
     setLoading(true);
-    Promise.all([
-      sb.select("cargo",    dq).then(r=>r.map(fromDB.cargo)).catch(()=>[]),
-      sb.select("tickets",  dq).then(r=>r.map(fromDB.tickets)).catch(()=>[]),
-      sb.select("bookings", dq).then(r=>r.map(fromDB.bookings)).catch(()=>[]),
-    ]).then(([c,t,b]) => {
-      setResults({ cargo:c.slice(0,5), tickets:t.slice(0,5), bookings:b.slice(0,5) });
-      setOpen(true);
-    }).finally(() => setLoading(false));
-  }, [dq]);
-
-  useEffect(() => {
-    const h = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, []);
-
-  const total = results ? results.cargo.length + results.tickets.length + results.bookings.length : 0;
-  const go = page => { onNavigate(page); setQuery(""); setResults(null); setOpen(false); };
-
+    Promise.all([sb.select("cargo",dq).then(r=>r.map(fromDB.cargo)).catch(()=>[]),sb.select("tickets",dq).then(r=>r.map(fromDB.tickets)).catch(()=>[]),sb.select("bookings",dq).then(r=>r.map(fromDB.bookings)).catch(()=>[])]).then(([c,t,b])=>{setResults({cargo:c.slice(0,5),tickets:t.slice(0,5),bookings:b.slice(0,5)});setOpen(true);}).finally(()=>setLoading(false));
+  },[dq]);
+  useEffect(()=>{const h=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
+  const total=results?results.cargo.length+results.tickets.length+results.bookings.length:0;
+  const go=page=>{onNavigate(page);setQuery("");setResults(null);setOpen(false);};
   return (
     <div className="global-search" ref={wrapRef}>
       <span className="gs-icon"><Icon name="search" size={15}/></span>
-      <input
-        placeholder="Search cargo, tickets, bookings…"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        onFocus={() => results && setOpen(true)}
-      />
-      {loading && <span className="gs-clear"><span className="spinner"/></span>}
-      {!loading && query && (
-        <button className="gs-clear" onClick={()=>{ setQuery(""); setResults(null); setOpen(false); }}>
-          <Icon name="close" size={14}/>
-        </button>
-      )}
-      {open && results && (
+      <input placeholder="Search cargo, tickets, bookings…" value={query} onChange={e=>setQuery(e.target.value)} onFocus={()=>results&&setOpen(true)}/>
+      {loading&&<span className="gs-clear"><span className="spinner"/></span>}
+      {!loading&&query&&<button className="gs-clear" onClick={()=>{setQuery("");setResults(null);setOpen(false);}}><Icon name="close" size={14}/></button>}
+      {open&&results&&(
         <div className="search-results">
-          {total === 0
-            ? <div className="sr-empty">No results for "{query}"</div>
-            : <>
-                {results.cargo.length > 0 && (
-                  <div className="sr-section">
-                    <div className="sr-section-title">Cargo</div>
-                    {results.cargo.map(r => (
-                      <div key={r.id} className="sr-item" onClick={()=>go("cargo")}>
-                        <span className="sr-badge badge-amber">CRG</span>
-                        <span className="sr-main">{r.senderName} → {r.receiverName}</span>
-                        <span className="sr-sub">{r.description}</span>
-                        <span className="sr-amt">SSP {fmt(r.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {results.cargo.length>0 && results.tickets.length>0 && <hr className="sr-divider"/>}
-                {results.tickets.length > 0 && (
-                  <div className="sr-section">
-                    <div className="sr-section-title">Tickets</div>
-                    {results.tickets.map(r => (
-                      <div key={r.id} className="sr-item" onClick={()=>go("ticketing")}>
-                        <span className="sr-badge badge-blue">TKT</span>
-                        <span className="sr-main">{r.passengerName}</span>
-                        <span className="sr-sub">{r.from} → {r.to}</span>
-                        <span className="sr-amt">SSP {fmt(r.fees)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {results.tickets.length>0 && results.bookings.length>0 && <hr className="sr-divider"/>}
-                {results.bookings.length > 0 && (
-                  <div className="sr-section">
-                    <div className="sr-section-title">Bookings</div>
-                    {results.bookings.map(r => (
-                      <div key={r.id} className="sr-item" onClick={()=>go("bookings")}>
-                        <span className="sr-badge badge-purple">BKG</span>
-                        <span className="sr-main">{r.passengerName}</span>
-                        <span className="sr-sub">{r.from} → {r.to} · {r.seatClass}</span>
-                        <span className="sr-amt">SSP {fmt(r.total)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-          }
+          {total===0?<div className="sr-empty">No results for "{query}"</div>:<>
+            {results.cargo.length>0&&<div className="sr-section"><div className="sr-section-title">Cargo</div>{results.cargo.map(r=>(<div key={r.id} className="sr-item" onClick={()=>go("cargo")}><span className="sr-badge badge-amber">CRG</span><span className="sr-main">{r.senderName} → {r.receiverName}</span><span className="sr-sub">{r.description}</span><span className="sr-amt">SSP {fmt(r.amount)}</span></div>))}</div>}
+            {results.cargo.length>0&&results.tickets.length>0&&<hr className="sr-divider"/>}
+            {results.tickets.length>0&&<div className="sr-section"><div className="sr-section-title">Tickets</div>{results.tickets.map(r=>(<div key={r.id} className="sr-item" onClick={()=>go("ticketing")}><span className="sr-badge badge-blue">TKT</span><span className="sr-main">{r.passengerName}</span><span className="sr-sub">{r.from} → {r.to}</span><span className="sr-amt">SSP {fmt(r.fees)}</span></div>))}</div>}
+            {results.tickets.length>0&&results.bookings.length>0&&<hr className="sr-divider"/>}
+            {results.bookings.length>0&&<div className="sr-section"><div className="sr-section-title">Bookings</div>{results.bookings.map(r=>(<div key={r.id} className="sr-item" onClick={()=>go("bookings")}><span className="sr-badge badge-purple">BKG</span><span className="sr-main">{r.passengerName}</span><span className="sr-sub">{r.from} → {r.to} · {r.seatClass}</span><span className="sr-amt">SSP {fmt(r.total)}</span></div>))}</div>}
+          </>}
         </div>
       )}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   DASHBOARD
-══════════════════════════════════════════════ */
 function Dashboard({ cargo, tickets, bookings }) {
-  const cRev=cargo.reduce((s,r)=>s+Number(r.amount||0),0), tRev=tickets.reduce((s,r)=>s+Number(r.fees||0),0), bRev=bookings.reduce((s,r)=>s+Number(r.total||0),0);
-  const combined=cRev+tRev+bRev, target=20000000, pct=Math.min(100,(combined/target)*100);
-  const payBreak={}, itemBreak={};
-  cargo.forEach(r=>{ const p=r.paymentMethod||"Other"; payBreak[p]=(payBreak[p]||0)+Number(r.amount||0); });
-  cargo.forEach(r=>{ const d=r.description||"Other"; itemBreak[d]=(itemBreak[d]||0)+1; });
+  const cRev=cargo.reduce((s,r)=>s+Number(r.amount||0),0),tRev=tickets.reduce((s,r)=>s+Number(r.fees||0),0),bRev=bookings.reduce((s,r)=>s+Number(r.total||0),0);
+  const combined=cRev+tRev+bRev,target=20000000,pct=Math.min(100,(combined/target)*100);
+  const payBreak={},itemBreak={};
+  cargo.forEach(r=>{const p=r.paymentMethod||"Other";payBreak[p]=(payBreak[p]||0)+Number(r.amount||0);});
+  cargo.forEach(r=>{const d=r.description||"Other";itemBreak[d]=(itemBreak[d]||0)+1;});
   const recent=[...cargo.map(r=>({type:"Cargo",id:r.id,name:r.senderName||"—",amount:r.amount,date:r.receivingDate,color:"accent"})),...tickets.map(r=>({type:"Ticket",id:r.ticketNo,name:r.passengerName||"—",amount:r.fees,date:r.date,color:"blue"})),...bookings.map(r=>({type:"Booking",id:r.bookingId,name:r.passengerName||"—",amount:r.total,date:r.bookingDate,color:"purple"}))].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,8);
   const barMax=Math.max(cRev,tRev,bRev,1);
   const bars=[{label:"Cargo",val:cRev,color:"#f0a500"},{label:"Tickets",val:tRev,color:"#58a6ff"},{label:"Bookings",val:bRev,color:"#a371f7"}];
   return (
     <div>
-      <div className="db-banner">
-        <Icon name="db" size={22}/>
-        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>Connected to Supabase · Cloud Database</div><div style={{fontSize:11,color:"var(--muted)"}}>All data stored in real-time cloud database — syncs across all devices.</div></div>
-        <span className="badge badge-green"><Icon name="check" size={12}/>Live</span>
-      </div>
+      <div className="db-banner"><Icon name="db" size={22}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>Connected to Supabase · Cloud Database</div><div style={{fontSize:11,color:"var(--muted)"}}>All data stored in real-time cloud database — syncs across all devices.</div></div><span className="badge badge-green"><Icon name="check" size={12}/>Live</span></div>
       <div className="grid-4" style={{marginBottom:20}}>
         <div className="card kpi gold glow"><div className="kpi-icon"><Icon name="money" size={40}/></div><div className="kpi-label">Combined Revenue</div><div className="kpi-val">SSP {fmt(combined)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>Cargo + Tickets + Bookings</div></div>
         <div className="card kpi green"><div className="kpi-icon"><Icon name="cargo" size={40}/></div><div className="kpi-label">Cargo Revenue</div><div className="kpi-val">SSP {fmt(cRev)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>{cargo.length} shipments</div></div>
@@ -398,99 +364,34 @@ function Dashboard({ cargo, tickets, bookings }) {
         <div className="card kpi purple"><div className="kpi-icon"><Icon name="booking" size={40}/></div><div className="kpi-label">Booking Revenue</div><div className="kpi-val">SSP {fmt(bRev)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>{bookings.length} bookings</div></div>
       </div>
       <div className="grid-2" style={{marginBottom:20}}>
-        <div className="card">
-          <div className="section-header"><div className="section-title">Revenue vs Target</div><span className="badge badge-amber">Target: SSP 20,000,000</span></div>
-          <div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--muted)",marginBottom:6}}><span>SSP {fmt(combined)}</span><span>{pct.toFixed(1)}%</span></div><div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`}}/></div></div>
-          <div className="bar-chart" style={{marginTop:16}}>{bars.map(b=>(<div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}><div className="bar" style={{background:b.color,height:`${Math.max(4,(b.val/barMax)*90)}px`,width:"100%"}}/><div className="bar-label">{b.label}</div></div>))}</div>
-        </div>
-        <div className="card">
-          <div className="section-title" style={{marginBottom:12}}>Payment Breakdown</div>
-          {Object.keys(payBreak).length===0?<div style={{color:"var(--muted)",fontSize:13}}>No data yet.</div>:Object.entries(payBreak).map(([k,v])=>(<div className="stat-row" key={k}><PayPill method={k}/><span className="stat-num">SSP {fmt(v)}</span></div>))}
-          <hr className="divider"/>
-          <div className="section-title" style={{marginBottom:12}}>Cargo Item Types</div>
-          {Object.keys(itemBreak).length===0?<div style={{color:"var(--muted)",fontSize:13}}>No data yet.</div>:Object.entries(itemBreak).slice(0,5).map(([k,v])=>(<div className="stat-row" key={k}><span style={{fontSize:13,color:"var(--muted)"}}>{k}</span><span className="stat-num">{v} shipment{v>1?"s":""}</span></div>))}
-        </div>
+        <div className="card"><div className="section-header"><div className="section-title">Revenue vs Target</div><span className="badge badge-amber">Target: SSP 20,000,000</span></div><div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--muted)",marginBottom:6}}><span>SSP {fmt(combined)}</span><span>{pct.toFixed(1)}%</span></div><div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`}}/></div></div><div className="bar-chart" style={{marginTop:16}}>{bars.map(b=>(<div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}><div className="bar" style={{background:b.color,height:`${Math.max(4,(b.val/barMax)*90)}px`,width:"100%"}}/><div className="bar-label">{b.label}</div></div>))}</div></div>
+        <div className="card"><div className="section-title" style={{marginBottom:12}}>Payment Breakdown</div>{Object.keys(payBreak).length===0?<div style={{color:"var(--muted)",fontSize:13}}>No data yet.</div>:Object.entries(payBreak).map(([k,v])=>(<div className="stat-row" key={k}><PayPill method={k}/><span className="stat-num">SSP {fmt(v)}</span></div>))}<hr className="divider"/><div className="section-title" style={{marginBottom:12}}>Cargo Item Types</div>{Object.keys(itemBreak).length===0?<div style={{color:"var(--muted)",fontSize:13}}>No data yet.</div>:Object.entries(itemBreak).slice(0,5).map(([k,v])=>(<div className="stat-row" key={k}><span style={{fontSize:13,color:"var(--muted)"}}>{k}</span><span className="stat-num">{v} shipment{v>1?"s":""}</span></div>))}</div>
       </div>
-      <div className="card">
-        <div className="section-title" style={{marginBottom:14}}>Recent Activity</div>
-        {recent.length===0?<div className="empty"><Icon name="dashboard" size={40}/><h3>No activity yet</h3><p>Start by adding cargo, tickets, or bookings.</p></div>:(
-          <div className="table-wrap"><table><thead><tr><th>Type</th><th>ID</th><th>Name</th><th>Date</th><th>Amount (SSP)</th></tr></thead><tbody>{recent.map((r,i)=>(<tr key={i}><td><span className={`badge ${r.color==="accent"?"badge-amber":r.color==="blue"?"badge-blue":"badge-purple"}`}>{r.type}</span></td><td className="mono">{r.id||"—"}</td><td>{r.name}</td><td style={{color:"var(--muted)",fontSize:12}}>{r.date||"—"}</td><td className="mono" style={{color:"var(--accent)"}}>{fmt(r.amount)}</td></tr>))}</tbody></table></div>
-        )}
-      </div>
+      <div className="card"><div className="section-title" style={{marginBottom:14}}>Recent Activity</div>{recent.length===0?<div className="empty"><Icon name="dashboard" size={40}/><h3>No activity yet</h3><p>Start by adding cargo, tickets, or bookings.</p></div>:(<div className="table-wrap"><table><thead><tr><th>Type</th><th>ID</th><th>Name</th><th>Date</th><th>Amount (SSP)</th></tr></thead><tbody>{recent.map((r,i)=>(<tr key={i}><td><span className={`badge ${r.color==="accent"?"badge-amber":r.color==="blue"?"badge-blue":"badge-purple"}`}>{r.type}</span></td><td className="mono">{r.id||"—"}</td><td>{r.name}</td><td style={{color:"var(--muted)",fontSize:12}}>{r.date||"—"}</td><td className="mono" style={{color:"var(--accent)"}}>{fmt(r.amount)}</td></tr>))}</tbody></table></div>)}</div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   CARGO REGISTER
-══════════════════════════════════════════════ */
 function CargoRegister({ data, setData, toast }) {
-  const [showForm,setShowForm]=useState(false), [search,setSearch]=useState(""), [editing,setEditing]=useState(null), [saving,setSaving]=useState(false);
+  const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
   const emptyForm={receivingDate:today(),description:"",unitKg:"",unitPrice:"",qty:"",spec:"",senderName:"",senderLocation:"",senderContact:"",receiverName:"",receiverLocation:"",receiverContact:"",paymentMethod:"Cash",amount:""};
-  const [form,setForm]=useState(emptyForm), [errors,setErrors]=useState({});
+  const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>{const nf={...f,[k]:v};if(k==="unitPrice"||k==="qty"){const p=parseFloat(k==="unitPrice"?v:nf.unitPrice)||0,q=parseFloat(k==="qty"?v:nf.qty)||0;nf.amount=p*q||"";}return nf;});
   const validate=()=>{const e={};if(!form.senderName.trim())e.senderName="Required";if(!form.receiverName.trim())e.receiverName="Required";if(!form.description)e.description="Required";setErrors(e);return Object.keys(e).length===0;};
-  const submit=async()=>{
-    if(!validate()){toast("Please fix form errors","error");return;}
-    setSaving(true);
-    try{
-      if(editing){await sb.update("cargo",editing,toDB.cargo({...form,id:editing}));setData(d=>d.map(r=>r.id===editing?{...form,id:editing}:r));toast("Updated ✓","success");}
-      else{const id=`CRG-${String(data.length+1).padStart(3,"0")}`,row={...form,id};await sb.insert("cargo",toDB.cargo(row));setData(d=>[row,...d]);toast("Saved ✓","success");}
-      setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});
-    }catch(e){toast("Error: "+e.message,"error");}
-    setSaving(false);
-  };
+  const submit=async()=>{if(!validate()){toast("Please fix form errors","error");return;}setSaving(true);try{if(editing){await sb.update("cargo",editing,toDB.cargo({...form,id:editing}));setData(d=>d.map(r=>r.id===editing?{...form,id:editing}:r));toast("Updated ✓","success");}else{const id=`CRG-${String(data.length+1).padStart(3,"0")}`,row={...form,id};await sb.insert("cargo",toDB.cargo(row));setData(d=>[row,...d]);toast("Saved ✓","success");}setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});}catch(e){toast("Error: "+e.message,"error");}setSaving(false);};
   const del=async id=>{try{await sb.remove("cargo",id);setData(d=>d.filter(r=>r.id!==id));toast("Deleted","error");}catch(e){toast("Delete failed: "+e.message,"error");}};
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);};
   const filtered=data.filter(r=>[(r.senderName||""),(r.receiverName||""),(r.id||""),(r.description||"")].some(v=>v.toLowerCase().includes(search.toLowerCase())));
   const total=data.reduce((s,r)=>s+Number(r.amount||0),0);
   return (
     <div>
-      <div className="section-header">
-        <div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div>
-        <div style={{display:"flex",gap:8}}>
-          <div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:200}}/></div>
-          <button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button>
-        </div>
-      </div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(
-        <div className="card"><div className="table-wrap"><table>
-          <thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead>
-          <tbody>
-            {filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}
-            <tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr>
-          </tbody>
-        </table></div></div>
-      )}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
-        <div className="modal">
-          <div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div>
-          <div className="modal-body"><div className="form-grid">
-            <div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div>
-            <div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className="form-input" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Qty</label><input type="number" className="form-input" value={form.qty} onChange={e=>set("qty",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div>
-            <div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className="form-input" value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div>
-            <div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className="form-input" value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Amount (SSP)</label><input type="number" className="form-input" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div>
-          </div></div>
-          <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div>
-        </div>
-      </div>)}
+      <div className="section-header"><div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:200}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div><div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className="form-input" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div><div className="form-group"><label className="form-label">Qty</label><input type="number" className="form-input" value={form.qty} onChange={e=>set("qty",e.target.value)}/></div><div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div><div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className="form-input" value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div><div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className="form-input" value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (SSP)</label><input type="number" className="form-input" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div></div></div>)}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   TICKETING
-══════════════════════════════════════════════ */
 function Ticketing({ data, setData, toast }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
   const nextTicket=117+data.length;
@@ -498,17 +399,7 @@ function Ticketing({ data, setData, toast }) {
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const validate=()=>{const e={};if(!form.passengerName.trim())e.passengerName="Required";if(!form.from.trim())e.from="Required";if(!form.to.trim())e.to="Required";setErrors(e);return Object.keys(e).length===0;};
-  const submit=async()=>{
-    if(!validate()){toast("Please fix errors","error");return;}
-    setSaving(true);
-    try{
-      const id=editing||uid("TKT"),row={...form,id};
-      if(editing){await sb.update("tickets",editing,toDB.tickets(row));setData(d=>d.map(r=>r.id===editing?row:r));toast("Updated ✓","success");}
-      else{await sb.insert("tickets",toDB.tickets(row));setData(d=>[row,...d]);toast("Ticket saved ✓","success");}
-      setShowForm(false);setEditing(null);setForm({...emptyForm,ticketNo:nextTicket+1});
-    }catch(e){toast("Error: "+e.message,"error");}
-    setSaving(false);
-  };
+  const submit=async()=>{if(!validate()){toast("Please fix errors","error");return;}setSaving(true);try{const id=editing||uid("TKT"),row={...form,id};if(editing){await sb.update("tickets",editing,toDB.tickets(row));setData(d=>d.map(r=>r.id===editing?row:r));toast("Updated ✓","success");}else{await sb.insert("tickets",toDB.tickets(row));setData(d=>[row,...d]);toast("Ticket saved ✓","success");}setShowForm(false);setEditing(null);setForm({...emptyForm,ticketNo:nextTicket+1});}catch(e){toast("Error: "+e.message,"error");}setSaving(false);};
   const del=async id=>{try{await sb.remove("tickets",id);setData(d=>d.filter(r=>r.id!==id));toast("Deleted","error");}catch(e){toast("Delete failed: "+e.message,"error");}};
   const handlePrint=r=>printInNewWindow(buildTicketHTML(r));
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);setErrors({});};
@@ -516,164 +407,53 @@ function Ticketing({ data, setData, toast }) {
   const totalFees=data.reduce((s,r)=>s+Number(r.fees||0),0);
   return (
     <div>
-      <div className="section-header">
-        <div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · SSP {fmt(totalFees)}</div></div>
-        <div style={{display:"flex",gap:8}}>
-          <div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div>
-          <button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:nextTicket});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button>
-        </div>
-      </div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(
-        <div className="card"><div className="table-wrap"><table>
-          <thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (SSP)</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            {filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>{fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)}><Icon name="print" size={13}/></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}
-            <tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>{fmt(totalFees)}</td><td colSpan={2}/></tr>
-          </tbody>
-        </table></div></div>
-      )}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
-        <div className="modal">
-          <div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div>
-          <div className="modal-body"><div className="form-grid">
-            {[{k:"ticketNo",l:"Ticket No.",t:"number"},{k:"date",l:"Date",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (SSP)",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}
-            <div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div>
-          </div></div>
-          <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div>
-        </div>
-      </div>)}
+      <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · SSP {fmt(totalFees)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:nextTicket});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (SSP)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>{fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)}><Icon name="print" size={13}/></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>{fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid">{[{k:"ticketNo",l:"Ticket No.",t:"number"},{k:"date",l:"Date",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (SSP)",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}<div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div></div></div>)}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   BOOKINGS
-══════════════════════════════════════════════ */
 function Bookings({ data, setData, toast }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
   const emptyForm={bookingDate:today(),passengerName:"",phone:"",idPassport:"",from:"",to:"",flightNo:"",departureDate:"",departureTime:"",seatClass:"Economy",luggageKg:"",fare:"",taxes:"",status:"Booked"};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>{const nf={...f,[k]:v};if(k==="fare"||k==="taxes")nf.total=(parseFloat(k==="fare"?v:nf.fare)||0)+(parseFloat(k==="taxes"?v:nf.taxes)||0);return nf;});
   const validate=()=>{const e={};if(!form.passengerName.trim())e.passengerName="Required";if(!form.from.trim())e.from="Required";if(!form.to.trim())e.to="Required";setErrors(e);return Object.keys(e).length===0;};
-  const submit=async()=>{
-    if(!validate()){toast("Please fix errors","error");return;}
-    setSaving(true);
-    try{
-      const id=editing||uid("B"),bkgId=editing?form.bookingId:`BKG-${String(data.length+1).padStart(4,"0")}`,total=(parseFloat(form.fare)||0)+(parseFloat(form.taxes)||0),row={...form,id,bookingId:bkgId,total};
-      if(editing){await sb.update("bookings",editing,toDB.bookings(row));setData(d=>d.map(r=>r.id===editing?row:r));toast("Updated ✓","success");}
-      else{await sb.insert("bookings",toDB.bookings(row));setData(d=>[row,...d]);toast("Booking confirmed ✓","success");}
-      setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});
-    }catch(e){toast("Error: "+e.message,"error");}
-    setSaving(false);
-  };
+  const submit=async()=>{if(!validate()){toast("Please fix errors","error");return;}setSaving(true);try{const id=editing||uid("B"),bkgId=editing?form.bookingId:`BKG-${String(data.length+1).padStart(4,"0")}`,total=(parseFloat(form.fare)||0)+(parseFloat(form.taxes)||0),row={...form,id,bookingId:bkgId,total};if(editing){await sb.update("bookings",editing,toDB.bookings(row));setData(d=>d.map(r=>r.id===editing?row:r));toast("Updated ✓","success");}else{await sb.insert("bookings",toDB.bookings(row));setData(d=>[row,...d]);toast("Booking confirmed ✓","success");}setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});}catch(e){toast("Error: "+e.message,"error");}setSaving(false);};
   const del=async id=>{try{await sb.remove("bookings",id);setData(d=>d.filter(r=>r.id!==id));toast("Deleted","error");}catch(e){toast("Delete failed: "+e.message,"error");}};
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);setErrors({});};
   const filtered=data.filter(r=>(r.passengerName||"").toLowerCase().includes(search.toLowerCase())||(r.bookingId||"").includes(search)||(r.from||"").toLowerCase().includes(search.toLowerCase())||(r.to||"").toLowerCase().includes(search.toLowerCase()));
   const totalRev=data.reduce((s,r)=>s+Number(r.total||0),0);
   return (
     <div>
-      <div className="section-header">
-        <div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · SSP {fmt(totalRev)}</div></div>
-        <div style={{display:"flex",gap:8}}>
-          <div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div>
-          <button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button>
-        </div>
-      </div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(
-        <div className="card"><div className="table-wrap"><table>
-          <thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total (SSP)</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>
-            {filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">{fmt(r.fare)}</td><td className="mono">{fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}
-            <tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>{fmt(totalRev)}</td><td colSpan={2}/></tr>
-          </tbody>
-        </table></div></div>
-      )}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
-        <div className="modal">
-          <div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div>
-          <div className="modal-body"><div className="form-grid">
-            <div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div>
-            <div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div>
-            <div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div>
-            <div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Fare (SSP)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Taxes (SSP)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Total (SSP)</label><input type="number" className="form-input" value={form.total||""} readOnly style={{borderColor:"var(--green)"}}/></div>
-            <div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div>
-          </div></div>
-          <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div>
-        </div>
-      </div>)}
+      <div className="section-header"><div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · SSP {fmt(totalRev)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total (SSP)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">{fmt(r.fare)}</td><td className="mono">{fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)}><Icon name="edit" size={13}/></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)}><Icon name="trash" size={13}/></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>{fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Fare (SSP)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div><div className="form-group"><label className="form-label">Taxes (SSP)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div><div className="form-group"><label className="form-label">Total (SSP)</label><input type="number" className="form-input" value={form.total||""} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   INVOICE
-══════════════════════════════════════════════ */
 function Invoice({ cargo, tickets, bookings, toast }) {
   const [form,setForm]=useState({type:"cargo",refId:"",invNo:`INV-${String(Date.now()).slice(-4)}`,invDate:today(),dueDate:"",taxPct:0});
   const [preview,setPreview]=useState(null);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const allRecords={cargo,tickets,bookings};
   const refs={cargo:cargo.map(r=>({id:r.id,label:`${r.id} – ${r.senderName} → ${r.receiverName}`})),tickets:tickets.map(r=>({id:r.id,label:`Ticket #${r.ticketNo} – ${r.passengerName}`})),bookings:bookings.map(r=>({id:r.id,label:`${r.bookingId} – ${r.passengerName}`}))};
-  const buildPreview=()=>{
-    const rec=allRecords[form.type].find(r=>r.id===form.refId);
-    if(!rec){toast("Select a valid record","error");return null;}
-    let lines=[],bill={},amount=0;
-    if(form.type==="cargo"){bill={name:rec.senderName,phone:rec.senderContact,route:`${rec.senderLocation} → ${rec.receiverLocation}`};lines=[{desc:rec.description,date:rec.receivingDate,wt:rec.unitKg,unitPrice:rec.unitPrice,qty:rec.qty,amount:rec.amount}];amount=Number(rec.amount||0);}
-    else if(form.type==="tickets"){bill={name:rec.passengerName,phone:rec.phone,route:`${rec.from} → ${rec.to}`};lines=[{desc:`Flight Ticket – ${rec.from} → ${rec.to}`,date:rec.date,wt:rec.weightKg,unitPrice:rec.fees,qty:1,amount:rec.fees}];amount=Number(rec.fees||0);}
-    else{bill={name:rec.passengerName,phone:rec.phone,route:`${rec.from} → ${rec.to}`};lines=[{desc:`Flight Fare – ${rec.seatClass}`,date:rec.bookingDate,wt:rec.luggageKg,unitPrice:rec.fare,qty:1,amount:rec.fare},{desc:"Taxes & Fees",date:rec.bookingDate,wt:"—",unitPrice:rec.taxes,qty:1,amount:rec.taxes}];amount=Number(rec.total||0);}
-    const tax=amount*(parseFloat(form.taxPct)/100||0);
-    return{...form,bill,lines,subtotal:amount,tax,grand:amount+tax};
-  };
+  const buildPreview=()=>{const rec=allRecords[form.type].find(r=>r.id===form.refId);if(!rec){toast("Select a valid record","error");return null;}let lines=[],bill={},amount=0;if(form.type==="cargo"){bill={name:rec.senderName,phone:rec.senderContact,route:`${rec.senderLocation} → ${rec.receiverLocation}`};lines=[{desc:rec.description,date:rec.receivingDate,wt:rec.unitKg,unitPrice:rec.unitPrice,qty:rec.qty,amount:rec.amount}];amount=Number(rec.amount||0);}else if(form.type==="tickets"){bill={name:rec.passengerName,phone:rec.phone,route:`${rec.from} → ${rec.to}`};lines=[{desc:`Flight Ticket – ${rec.from} → ${rec.to}`,date:rec.date,wt:rec.weightKg,unitPrice:rec.fees,qty:1,amount:rec.fees}];amount=Number(rec.fees||0);}else{bill={name:rec.passengerName,phone:rec.phone,route:`${rec.from} → ${rec.to}`};lines=[{desc:`Flight Fare – ${rec.seatClass}`,date:rec.bookingDate,wt:rec.luggageKg,unitPrice:rec.fare,qty:1,amount:rec.fare},{desc:"Taxes & Fees",date:rec.bookingDate,wt:"—",unitPrice:rec.taxes,qty:1,amount:rec.taxes}];amount=Number(rec.total||0);}const tax=amount*(parseFloat(form.taxPct)/100||0);return{...form,bill,lines,subtotal:amount,tax,grand:amount+tax};};
   const generate=()=>{const p=buildPreview();if(p){setPreview(p);toast("Invoice generated ✓","success");}};
   const handlePrint=()=>{if(preview)printInNewWindow(buildInvoiceHTML(preview));};
   return (
     <div>
       <div className="section-header"><div className="section-title">Invoice Generator</div></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1.6fr",gap:16,alignItems:"start"}}>
-        <div className="card">
-          <div style={{fontWeight:700,marginBottom:16,fontSize:14}}>Generate Invoice</div>
-          <div className="form-grid" style={{gridTemplateColumns:"1fr 1fr"}}>
-            <div className="form-group"><label className="form-label">Invoice No.</label><input className="form-input" value={form.invNo} onChange={e=>set("invNo",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className="form-input" value={form.invDate} onChange={e=>set("invDate",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={form.dueDate} onChange={e=>set("dueDate",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className="form-input" value={form.taxPct} onChange={e=>set("taxPct",e.target.value)}/></div>
-            <div className="form-group"><label className="form-label">Record Type</label><select className="form-select" value={form.type} onChange={e=>{set("type",e.target.value);set("refId","");}}><option value="cargo">Cargo</option><option value="tickets">Ticket</option><option value="bookings">Booking</option></select></div>
-            <div className="form-group"><label className="form-label">Select Record</label><select className="form-select" value={form.refId} onChange={e=>set("refId",e.target.value)}><option value="">— Choose —</option>{refs[form.type].map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div>
-          </div>
-          <div style={{marginTop:16}}><button className="btn btn-primary" onClick={generate} style={{width:"100%"}}><Icon name="invoice" size={15}/>Generate Invoice</button></div>
-        </div>
-        {preview?(
-          <div style={{overflowY:"auto"}}>
-            <div className="invoice-paper">
-              <div className="inv-header"><div><div className="inv-company-name">PERWAANI</div><div style={{fontWeight:700,fontSize:13,color:"#333"}}>General Trading &amp; Investment Co. Ltd</div><div className="inv-address">Juba Airport Road, South Sudan<br/>perwaani2023@gmail.com · +211 (0) 920 000 149</div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase"}}>Invoice</div><div className="inv-no">{preview.invNo}</div><div className="inv-label">Date</div><div className="inv-val">{preview.invDate}</div>{preview.dueDate&&<><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}</div></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20,paddingBottom:16,borderBottom:"1px solid #eee"}}><div><div className="inv-label">Bill To</div><div style={{fontSize:15,fontWeight:700,marginTop:4,color:"#111"}}>{preview.bill.name}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.phone}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.route}</div></div><div><div className="inv-label">Payment Details</div><div style={{fontSize:12,marginTop:4,color:"#333"}}><span style={{color:"#888"}}>Method: </span>Cash / Mobile Money</div><div style={{fontSize:12,color:"#333"}}><span style={{color:"#888"}}>Ref: </span>{preview.invNo}</div></div></div>
-              <table className="inv-table"><thead><tr><th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price (SSP)</th><th>Qty</th><th style={{textAlign:"right"}}>Amount (SSP)</th></tr></thead><tbody>{preview.lines.map((l,i)=>(<tr key={i}><td>{i+1}</td><td>{l.desc||"—"}</td><td>{l.date||"—"}</td><td>{l.wt||"—"}</td><td>{fmt(l.unitPrice)}</td><td>{l.qty||1}</td><td style={{textAlign:"right",fontWeight:600}}>{fmt(l.amount)}</td></tr>))}</tbody><tfoot><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Subtotal</td><td style={{textAlign:"right"}}>{fmt(preview.subtotal)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Tax ({preview.taxPct}%)</td><td style={{textAlign:"right"}}>{fmt(preview.tax)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",fontWeight:700}}>GRAND TOTAL (SSP)</td><td style={{textAlign:"right",fontWeight:800,color:"#c48b00"}}>{fmt(preview.grand)}</td></tr></tfoot></table>
-              <div className="inv-footer">Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br/>This invoice is official proof of payment. Payment due within 30 days.</div>
-            </div>
-            <div style={{display:"flex",justifyContent:"center",marginTop:12}}><button className="btn btn-primary" onClick={handlePrint}><Icon name="print" size={15}/>Print Invoice</button></div>
-          </div>
-        ):(
-          <div className="card" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300}}><div className="empty"><Icon name="invoice" size={40}/><h3>No invoice yet</h3><p>Select a record and click Generate Invoice.</p></div></div>
-        )}
+        <div className="card"><div style={{fontWeight:700,marginBottom:16,fontSize:14}}>Generate Invoice</div><div className="form-grid" style={{gridTemplateColumns:"1fr 1fr"}}><div className="form-group"><label className="form-label">Invoice No.</label><input className="form-input" value={form.invNo} onChange={e=>set("invNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className="form-input" value={form.invDate} onChange={e=>set("invDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={form.dueDate} onChange={e=>set("dueDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className="form-input" value={form.taxPct} onChange={e=>set("taxPct",e.target.value)}/></div><div className="form-group"><label className="form-label">Record Type</label><select className="form-select" value={form.type} onChange={e=>{set("type",e.target.value);set("refId","");}}><option value="cargo">Cargo</option><option value="tickets">Ticket</option><option value="bookings">Booking</option></select></div><div className="form-group"><label className="form-label">Select Record</label><select className="form-select" value={form.refId} onChange={e=>set("refId",e.target.value)}><option value="">— Choose —</option>{refs[form.type].map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div></div><div style={{marginTop:16}}><button className="btn btn-primary" onClick={generate} style={{width:"100%"}}><Icon name="invoice" size={15}/>Generate Invoice</button></div></div>
+        {preview?(<div style={{overflowY:"auto"}}><div className="invoice-paper"><div className="inv-header"><div><div className="inv-company-name">PERWAANI</div><div style={{fontWeight:700,fontSize:13,color:"#333"}}>General Trading &amp; Investment Co. Ltd</div><div className="inv-address">Juba Airport Road, South Sudan<br/>perwaani2023@gmail.com · +211 (0) 920 000 149</div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase"}}>Invoice</div><div className="inv-no">{preview.invNo}</div><div className="inv-label">Date</div><div className="inv-val">{preview.invDate}</div>{preview.dueDate&&<><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20,paddingBottom:16,borderBottom:"1px solid #eee"}}><div><div className="inv-label">Bill To</div><div style={{fontSize:15,fontWeight:700,marginTop:4,color:"#111"}}>{preview.bill.name}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.phone}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.route}</div></div><div><div className="inv-label">Payment Details</div><div style={{fontSize:12,marginTop:4,color:"#333"}}><span style={{color:"#888"}}>Method: </span>Cash / Mobile Money</div><div style={{fontSize:12,color:"#333"}}><span style={{color:"#888"}}>Ref: </span>{preview.invNo}</div></div></div><table className="inv-table"><thead><tr><th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price (SSP)</th><th>Qty</th><th style={{textAlign:"right"}}>Amount (SSP)</th></tr></thead><tbody>{preview.lines.map((l,i)=>(<tr key={i}><td>{i+1}</td><td>{l.desc||"—"}</td><td>{l.date||"—"}</td><td>{l.wt||"—"}</td><td>{fmt(l.unitPrice)}</td><td>{l.qty||1}</td><td style={{textAlign:"right",fontWeight:600}}>{fmt(l.amount)}</td></tr>))}</tbody><tfoot><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Subtotal</td><td style={{textAlign:"right"}}>{fmt(preview.subtotal)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Tax ({preview.taxPct}%)</td><td style={{textAlign:"right"}}>{fmt(preview.tax)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",fontWeight:700}}>GRAND TOTAL (SSP)</td><td style={{textAlign:"right",fontWeight:800,color:"#c48b00"}}>{fmt(preview.grand)}</td></tr></tfoot></table><div className="inv-footer">Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br/>This invoice is official proof of payment. Payment due within 30 days.</div></div><div style={{display:"flex",justifyContent:"center",marginTop:12}}><button className="btn btn-primary" onClick={handlePrint}><Icon name="print" size={15}/>Print Invoice</button></div></div>):(<div className="card" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300}}><div className="empty"><Icon name="invoice" size={40}/><h3>No invoice yet</h3><p>Select a record and click Generate Invoice.</p></div></div>)}
       </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   REPORTS
-══════════════════════════════════════════════ */
 function Reports({ cargo, tickets, bookings }) {
   const cR=cargo.reduce((s,r)=>s+Number(r.amount||0),0),tR=tickets.reduce((s,r)=>s+Number(r.fees||0),0),bR=bookings.reduce((s,r)=>s+Number(r.total||0),0);
   const total=cR+tR+bR,txns=cargo.length+tickets.length+bookings.length,target=20000000;
@@ -681,26 +461,12 @@ function Reports({ cargo, tickets, bookings }) {
   return (
     <div>
       <div className="section-header"><div><div className="section-title">Monthly Operations Report</div><div style={{fontSize:12,color:"var(--muted)"}}>Generated {new Date().toLocaleDateString()}</div></div><button className="btn btn-secondary" onClick={()=>window.print()}><Icon name="print" size={15}/>Print</button></div>
-      <div className="card" style={{marginBottom:16}}>
-        <div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div>
-        <div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody>
-          <tr><td style={{fontWeight:600}}>Revenue (SSP)</td><td className="mono">{fmt(cR)}</td><td className="mono">{fmt(tR)}</td><td className="mono">{fmt(bR)}</td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(total)}</td><td className="mono">{fmt(target)}</td><td className="mono" style={{color:total>=target?"var(--green)":"var(--red)"}}>{fmt(total-target)}</td><td className="mono">{((total/target)*100).toFixed(1)}%</td><td><StatusBadge status={total>=target?"Confirmed":"Pending"}/></td></tr>
-          <tr><td style={{fontWeight:600}}>Transactions</td><td className="mono">{cargo.length}</td><td className="mono">{tickets.length}</td><td className="mono">{bookings.length}</td><td className="mono" style={{fontWeight:700}}>{txns}</td><td className="mono">50</td><td className="mono" style={{color:txns>=50?"var(--green)":"var(--red)"}}>{txns-50}</td><td className="mono">{((txns/50)*100).toFixed(1)}%</td><td><StatusBadge status={txns>=50?"Confirmed":"Pending"}/></td></tr>
-        </tbody></table></div>
-      </div>
-      <div className="card">
-        <div style={{fontWeight:700,marginBottom:12,fontSize:14}}>KPI Scoreboard</div>
-        <div className="table-wrap"><table><thead><tr><th>KPI</th><th>Actual</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Rating</th><th>Owner</th><th>Status</th></tr></thead><tbody>
-          {kpis.map(k=>{const pct=k.target>0?k.actual/k.target:0;return(<tr key={k.name}><td style={{fontWeight:600}}>{k.name}</td><td className="mono" style={{color:"var(--accent)"}}>{fmt(k.actual)}</td><td className="mono">{fmt(k.target)}</td><td className="mono" style={{color:k.actual>=k.target?"var(--green)":"var(--red)"}}>{fmt(k.actual-k.target)}</td><td className="mono">{(pct*100).toFixed(1)}%</td><td style={{fontSize:16}}>{pct>=0.9?"★★★":pct>=0.5?"★★☆":"★☆☆"}</td><td style={{color:"var(--muted)",fontSize:12}}>{k.owner}</td><td><StatusBadge status={pct>=1?"Confirmed":pct>=0.5?"Pending":"Cancelled"}/></td></tr>);})}
-        </tbody></table></div>
-      </div>
+      <div className="card" style={{marginBottom:16}}><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody><tr><td style={{fontWeight:600}}>Revenue (SSP)</td><td className="mono">{fmt(cR)}</td><td className="mono">{fmt(tR)}</td><td className="mono">{fmt(bR)}</td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(total)}</td><td className="mono">{fmt(target)}</td><td className="mono" style={{color:total>=target?"var(--green)":"var(--red)"}}>{fmt(total-target)}</td><td className="mono">{((total/target)*100).toFixed(1)}%</td><td><StatusBadge status={total>=target?"Confirmed":"Pending"}/></td></tr><tr><td style={{fontWeight:600}}>Transactions</td><td className="mono">{cargo.length}</td><td className="mono">{tickets.length}</td><td className="mono">{bookings.length}</td><td className="mono" style={{fontWeight:700}}>{txns}</td><td className="mono">50</td><td className="mono" style={{color:txns>=50?"var(--green)":"var(--red)"}}>{txns-50}</td><td className="mono">{((txns/50)*100).toFixed(1)}%</td><td><StatusBadge status={txns>=50?"Confirmed":"Pending"}/></td></tr></tbody></table></div></div>
+      <div className="card"><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>KPI Scoreboard</div><div className="table-wrap"><table><thead><tr><th>KPI</th><th>Actual</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Rating</th><th>Owner</th><th>Status</th></tr></thead><tbody>{kpis.map(k=>{const pct=k.target>0?k.actual/k.target:0;return(<tr key={k.name}><td style={{fontWeight:600}}>{k.name}</td><td className="mono" style={{color:"var(--accent)"}}>{fmt(k.actual)}</td><td className="mono">{fmt(k.target)}</td><td className="mono" style={{color:k.actual>=k.target?"var(--green)":"var(--red)"}}>{fmt(k.actual-k.target)}</td><td className="mono">{(pct*100).toFixed(1)}%</td><td style={{fontSize:16}}>{pct>=0.9?"★★★":pct>=0.5?"★★☆":"★☆☆"}</td><td style={{color:"var(--muted)",fontSize:12}}>{k.owner}</td><td><StatusBadge status={pct>=1?"Confirmed":pct>=0.5?"Pending":"Cancelled"}/></td></tr>);})}</tbody></table></div></div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════
-   ROOT APP
-══════════════════════════════════════════════ */
 export default function App() {
   const [page,setPage]=useState("dashboard"),[sideOpen,setSideOpen]=useState(true);
   const [cargo,setCargo]=useState([]),[tickets,setTickets]=useState([]),[bookings,setBookings]=useState([]);
@@ -708,12 +474,7 @@ export default function App() {
   const [toast,setToast]=useState(null);
 
   useEffect(()=>{
-    Promise.all([
-      sb.select("cargo").then(r=>r.map(fromDB.cargo)),
-      sb.select("tickets").then(r=>r.map(fromDB.tickets)),
-      sb.select("bookings").then(r=>r.map(fromDB.bookings)),
-    ]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);})
-    .catch(e=>{setDbError(e.message);setLoading(false);});
+    Promise.all([sb.select("cargo").then(r=>r.map(fromDB.cargo)),sb.select("tickets").then(r=>r.map(fromDB.tickets)),sb.select("bookings").then(r=>r.map(fromDB.bookings))]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);}).catch(e=>{setDbError(e.message);setLoading(false);});
   },[]);
 
   const showToast=useCallback((msg,type="success")=>setToast({msg,type}),[]);
@@ -724,65 +485,24 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <div className="app">
+        {/* Mobile overlay – tap to close sidebar */}
+        <div className={`sidebar-overlay ${sideOpen?"visible":""}`} onClick={()=>setSideOpen(false)}/>
         <div className={`sidebar ${sideOpen?"open":"collapsed"}`}>
-          <div className="sidebar-logo">
-            <div className="logo-icon">PW</div>
-            {sideOpen&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}
-          </div>
+          <div className="sidebar-logo"><div className="logo-icon">PW</div>{sideOpen&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}</div>
           <nav className="nav">
             {sideOpen&&<div className="nav-section">Main Menu</div>}
-            {nav.map(n=>(<div key={n.id} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>setPage(n.id)}><span className="icon"><Icon name={n.icon} size={18}/></span>{sideOpen&&<span>{n.label}</span>}</div>))}
+            {nav.map(n=>(<div key={n.id} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>{setPage(n.id);if(window.innerWidth<=768)setSideOpen(false);}}><span className="icon"><Icon name={n.icon} size={18}/></span>{sideOpen&&<span>{n.label}</span>}</div>))}
           </nav>
           {sideOpen&&<div className="sidebar-footer"><div>Juba Airport Road, South Sudan</div><div><a href="mailto:perwaani2023@gmail.com">perwaani2023@gmail.com</a></div></div>}
         </div>
-
         <div className="main">
           <div className="topbar">
-            <div className="topbar-left">
-              <button className="btn btn-ghost btn-sm" onClick={()=>setSideOpen(p=>!p)} style={{padding:"6px 8px"}}><Icon name="menu" size={18}/></button>
-              <div><div className="page-title">{titles[page]}</div><div className="page-sub">Perwaani General Trading &amp; Investment Co. Ltd</div></div>
-            </div>
-            {/* ── GLOBAL SEARCH – searches all 3 Supabase tables live ── */}
-            <div className="topbar-center">
-              <GlobalSearch onNavigate={setPage}/>
-            </div>
-            <div className="topbar-right">
-              <span className={`badge ${dbError?"badge-red":"badge-green"}`}><Icon name={dbError?"alert":"db"} size={12}/>{dbError?"DB Error":"Supabase"}</span>
-              <span style={{fontSize:12,color:"var(--muted)"}}>{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span>
-            </div>
+            <div className="topbar-left"><button className="btn btn-ghost btn-sm" onClick={()=>setSideOpen(p=>!p)} style={{padding:"6px 8px"}}><Icon name="menu" size={18}/></button><div><div className="page-title">{titles[page]}</div><div className="page-sub">Perwaani General Trading &amp; Investment Co. Ltd</div></div></div>
+            <div className="topbar-center"><GlobalSearch onNavigate={setPage}/></div>
+            <div className="topbar-right"><span className={`badge ${dbError?"badge-red":"badge-green"}`}><Icon name={dbError?"alert":"db"} size={12}/>{dbError?"DB Error":"Supabase"}</span><span style={{fontSize:12,color:"var(--muted)"}}>{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span></div>
           </div>
-
           <div className="content">
-            {loading?(
-              <div style={{textAlign:"center",padding:"80px 20px",color:"var(--muted)"}}>
-                <span className="spinner" style={{width:28,height:28,borderWidth:3}}/>
-                <div style={{marginTop:12,fontSize:14}}>Loading from Supabase…</div>
-              </div>
-            ):dbError?(
-              <div style={{maxWidth:600,margin:"40px auto"}}>
-                <div className="card" style={{borderColor:"var(--red)",background:"rgba(248,81,73,0.04)"}}>
-                  <div style={{fontWeight:700,color:"var(--red)",marginBottom:10,fontSize:15}}>⚠ Database Connection Error</div>
-                  <div style={{fontSize:13,color:"var(--muted)",marginBottom:20,background:"var(--surface2)",padding:"10px 14px",borderRadius:8,fontFamily:"monospace"}}>{dbError}</div>
-                  <div style={{fontSize:13,lineHeight:2.0}}>
-                    <strong style={{color:"var(--text)"}}>Setup steps:</strong><br/>
-                    1. Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{color:"var(--blue)"}}>supabase.com</a> → create a free project<br/>
-                    2. Run <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>supabase_setup.sql</code> in the SQL Editor<br/>
-                    3. Copy your Project URL &amp; anon key from Settings → API<br/>
-                    4. Replace <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>SUPABASE_URL</code> and <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>SUPABASE_KEY</code> at the top of App.jsx<br/>
-                    5. Redeploy to Vercel
-                  </div>
-                </div>
-              </div>
-            ):(
-              <>
-                {page==="dashboard"&&<Dashboard cargo={cargo} tickets={tickets} bookings={bookings}/>}
-                {page==="cargo"&&<CargoRegister data={cargo} setData={setCargo} toast={showToast}/>}
-                {page==="ticketing"&&<Ticketing data={tickets} setData={setTickets} toast={showToast}/>}
-                {page==="bookings"&&<Bookings data={bookings} setData={setBookings} toast={showToast}/>}
-                {page==="invoice"&&<Invoice cargo={cargo} tickets={tickets} bookings={bookings} toast={showToast}/>}
-                {page==="reports"&&<Reports cargo={cargo} tickets={tickets} bookings={bookings}/>}
-              </>
-            )}
+            {loading?(<div style={{textAlign:"center",padding:"80px 20px",color:"var(--muted)"}}><span className="spinner" style={{width:28,height:28,borderWidth:3}}/><div style={{marginTop:12,fontSize:14}}>Loading from Supabase…</div></div>):dbError?(<div style={{maxWidth:600,margin:"40px auto"}}><div className="card" style={{borderColor:"var(--red)",background:"rgba(248,81,73,0.04)"}}><div style={{fontWeight:700,color:"var(--red)",marginBottom:10,fontSize:15}}>⚠ Database Connection Error</div><div style={{fontSize:13,color:"var(--muted)",marginBottom:20,background:"var(--surface2)",padding:"10px 14px",borderRadius:8,fontFamily:"monospace"}}>{dbError}</div><div style={{fontSize:13,lineHeight:2.0}}><strong style={{color:"var(--text)"}}>Setup steps:</strong><br/>1. Go to <a href="https://supabase.com" target="_blank" rel="noreferrer" style={{color:"var(--blue)"}}>supabase.com</a> → create a free project<br/>2. Run <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>supabase_setup.sql</code> in the SQL Editor<br/>3. Copy your Project URL &amp; anon key from Settings → API<br/>4. Replace <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>SUPABASE_URL</code> and <code style={{background:"var(--surface2)",padding:"1px 6px",borderRadius:4}}>SUPABASE_KEY</code> at the top of App.jsx<br/>5. Redeploy to Vercel</div></div></div>):(<>{page==="dashboard"&&<Dashboard cargo={cargo} tickets={tickets} bookings={bookings}/>}{page==="cargo"&&<CargoRegister data={cargo} setData={setCargo} toast={showToast}/>}{page==="ticketing"&&<Ticketing data={tickets} setData={setTickets} toast={showToast}/>}{page==="bookings"&&<Bookings data={bookings} setData={setBookings} toast={showToast}/>}{page==="invoice"&&<Invoice cargo={cargo} tickets={tickets} bookings={bookings} toast={showToast}/>}{page==="reports"&&<Reports cargo={cargo} tickets={tickets} bookings={bookings}/>}</>)}
           </div>
         </div>
       </div>
