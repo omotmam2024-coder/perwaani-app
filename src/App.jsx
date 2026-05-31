@@ -16,9 +16,9 @@ const sb = {
     let url = `${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc`;
     if (search) {
       const cols = {
-        cargo:    ["sender_name","receiver_name","description","id"],
-        tickets:  ["passenger_name","from_location","to_location","flight_no"],
-        bookings: ["passenger_name","from_location","to_location","booking_id"],
+        cargo:    ["sender_name","receiver_name"],
+        tickets:  ["passenger_name"],
+        bookings: ["passenger_name"],
       }[table] || [];
       if (cols.length) url += `&or=(${cols.map(c=>`${c}=ilike.*${encodeURIComponent(search)}*`).join(",")})`;
     }
@@ -615,7 +615,7 @@ function GlobalSearch({ onNavigate }) {
     setLoading(true);
     const q=dq.trim();
     const searchTable=(table,mapper)=>{
-      const cols={cargo:["sender_name","receiver_name","description","id"],tickets:["passenger_name","from_location","to_location","flight_no"],bookings:["passenger_name","from_location","to_location","booking_id"]}[table];
+      const cols={cargo:["sender_name","receiver_name"],tickets:["passenger_name"],bookings:["passenger_name"]}[table];
       const filter=cols.map(c=>`${c}=ilike.*${encodeURIComponent(q)}*`).join(",");
       const url=`${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc&or=(${filter})`;
       const token=getSession()?.token||SUPABASE_KEY;
