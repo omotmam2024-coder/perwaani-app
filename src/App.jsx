@@ -24,22 +24,26 @@ const sb = {
     }
     const token = getSession()?.token || SUPABASE_KEY;
     const res = await fetch(url, { headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` } });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      const errText = await res.text();
+      if (errText.includes("JWT expired") || errText.includes("PGRST303")) { clearSession(); window.location.reload(); }
+      throw new Error(errText);
+    }
     return res.json();
   },
   async insert(table, row) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, { method:"POST", headers:{...sbHeaders(),"Prefer":"return=representation"}, body:JSON.stringify(row) });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) { const e=await res.text(); if(e.includes("JWT expired")||e.includes("PGRST303")){clearSession();window.location.reload();} throw new Error(e); }
     return res.json();
   },
   async update(table, id, row) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, { method:"PATCH", headers:{...sbHeaders(),"Prefer":"return=representation"}, body:JSON.stringify(row) });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) { const e=await res.text(); if(e.includes("JWT expired")||e.includes("PGRST303")){clearSession();window.location.reload();} throw new Error(e); }
     return res.json();
   },
   async remove(table, id) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, { method:"DELETE", headers:sbHeaders() });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) { const e=await res.text(); if(e.includes("JWT expired")||e.includes("PGRST303")){clearSession();window.location.reload();} throw new Error(e); }
   },
 };
 
@@ -78,6 +82,23 @@ function getSession() {
 }
 function saveSession(s) { localStorage.setItem("pw_session", JSON.stringify(s)); }
 function clearSession() { localStorage.removeItem("pw_session"); }
+
+async function refreshSession() {
+  const s = getSession();
+  if (!s?.refreshToken) { clearSession(); window.location.reload(); return; }
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY },
+      body: JSON.stringify({ refresh_token: s.refreshToken }),
+    });
+    if (!res.ok) { clearSession(); window.location.reload(); return; }
+    const data = await res.json();
+    const expiresAt = Date.now() + ((data.expires_in || 3600) * 1000);
+    saveSession({ ...s, token: data.access_token, refreshToken: data.refresh_token, expiresAt });
+    window.location.reload();
+  } catch { clearSession(); window.location.reload(); }
+}
 
 
 const fromDB = {
@@ -181,7 +202,8 @@ function LoginScreen({ onLogin }) {
           fullName = users[0].full_name || session.user.email;
         }
       } catch (_) { /* keep defaults */ }
-      const s = { token: session.access_token, userId: session.user.id, email: session.user.email, fullName, role };
+      const expiresAt = Date.now() + ((session.expires_in || 3600) * 1000);
+      const s = { token: session.access_token, refreshToken: session.refresh_token, userId: session.user.id, email: session.user.email, fullName, role, expiresAt };
       saveSession(s);
       onLogin(s);
     } catch (err) {
@@ -264,21 +286,33 @@ function UserManagement({ session, toast }) {
     if (!validate()) return;
     setSaving(true);
     try {
-      // 1. Create Supabase Auth user via admin endpoint
-      const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+      // 1. Sign up the new user using Supabase Auth signUp (works with anon key)
+      const signUpRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: "POST",
-        headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${session.token}` },
-        body: JSON.stringify({ email: form.email, password: form.password, email_confirm: true }),
+        headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY },
+        body: JSON.stringify({ email: form.email.trim(), password: form.password }),
       });
-      const authData = await authRes.json();
-      if (!authRes.ok) throw new Error(authData.msg || authData.message || "Failed to create auth user");
-      // 2. Insert into app_users with role
-      await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
+      const signUpData = await signUpRes.json();
+      if (!signUpRes.ok) throw new Error(signUpData.msg || signUpData.message || signUpData.error_description || "Failed to create user");
+      const newAuthId = signUpData.user?.id || signUpData.id;
+      if (!newAuthId) throw new Error("No user ID returned — user may already exist");
+
+      // 2. Insert into app_users with role using admin session token
+      const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
         method: "POST",
-        headers: { ...{"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`}, "Prefer":"return=representation" },
-        body: JSON.stringify({ auth_id: authData.id, email: form.email, full_name: form.full_name, role: form.role }),
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${session.token}`,
+          "Prefer": "return=representation"
+        },
+        body: JSON.stringify({ auth_id: newAuthId, email: form.email.trim(), full_name: form.full_name.trim(), role: form.role }),
       });
-      toast("User created ✓","success");
+      if (!insertRes.ok) {
+        const err = await insertRes.json();
+        throw new Error(err.message || err.details || "Failed to save user role");
+      }
+      toast("User created ✓ — they can now log in","success");
       setShowForm(false);
       setForm({ email:"", full_name:"", password:"", role:"staff" });
       loadUsers();
@@ -784,6 +818,16 @@ export default function App() {
   const [dbError,setDbError]  = useState(null);
   const [toast,setToast]      = useState(null);
   const showToast = useCallback((msg,type="success")=>setToast({msg,type}),[]);
+
+  // Auto-refresh token 5 minutes before expiry
+  useEffect(() => {
+    if (!session?.expiresAt) return;
+    const msUntilExpiry = session.expiresAt - Date.now();
+    const refreshIn = msUntilExpiry - 5 * 60 * 1000; // 5 min before expiry
+    if (refreshIn <= 0) { refreshSession(); return; }
+    const t = setTimeout(() => refreshSession(), refreshIn);
+    return () => clearTimeout(t);
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Role-based permission helper
   const can = (action) => {
