@@ -123,6 +123,95 @@ const today = () => new Date().toISOString().slice(0,10);
 // FIX BUG-04: uid() is now the canonical ID generator for all records
 const uid   = p  => `${p}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
+// ══════════════════════════════════════════════════════════════
+// SHARED VALIDATION HELPERS
+// ══════════════════════════════════════════════════════════════
+const V = {
+  required:   v => (!v || !String(v).trim()) ? "Required" : null,
+  minLen:   (v,n) => (!v || String(v).trim().length < n) ? `Min ${n} characters` : null,
+  positiveNum: v => {
+    const n = parseFloat(v);
+    if (v === "" || v === null || v === undefined) return "Required";
+    if (isNaN(n)) return "Must be a number";
+    if (n <= 0) return "Must be greater than 0";
+    return null;
+  },
+  nonNegNum: v => {
+    const n = parseFloat(v);
+    if (v === "" || v === null || v === undefined) return null; // optional field
+    if (isNaN(n)) return "Must be a number";
+    if (n < 0) return "Cannot be negative";
+    return null;
+  },
+  phone: v => {
+    if (!v || !String(v).trim()) return null; // phone is optional
+    const cleaned = String(v).replace(/[\s\-().+]/g, "");
+    if (!/^\d{7,15}$/.test(cleaned)) return "Enter a valid phone number (7–15 digits)";
+    return null;
+  },
+  email: v => {
+    if (!v || !String(v).trim()) return "Required";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).trim())) return "Enter a valid email address";
+    return null;
+  },
+  date: v => (!v ? "Required" : null),
+  notSameRoute: (from, to) => {
+    if (!from || !to) return null;
+    if (from.trim().toLowerCase() === to.trim().toLowerCase()) return "Origin and destination cannot be the same";
+    return null;
+  },
+  dateNotPast: v => {
+    if (!v) return null;
+    if (new Date(v) < new Date(today())) return "Date cannot be in the past";
+    return null;
+  },
+  dateOrder: (d1, d2, label) => {
+    if (!d1 || !d2) return null;
+    if (new Date(d2) < new Date(d1)) return `Must be after ${label}`;
+    return null;
+  },
+  pct: v => {
+    const n = parseFloat(v);
+    if (v === "" || v === null || v === undefined) return null;
+    if (isNaN(n) || n < 0 || n > 100) return "Must be between 0 and 100";
+    return null;
+  },
+  // collect errors: run rules and discard nulls
+  run: (rules) => {
+    const errors = {};
+    for (const [field, ...fns] of rules) {
+      for (const fn of fns) {
+        const err = fn();
+        if (err) { errors[field] = err; break; }
+      }
+    }
+    return errors;
+  },
+};
+
+// Block e/E/+/- keys in number inputs (prevents scientific notation entry)
+const blockSci = e => { if (["e","E","+","-"].includes(e.key)) e.preventDefault(); };
+
+// ── INVOICE NUMBER GENERATOR ──────────────────────────────────────────────────
+// Format: INV-YYYY-NNNN  (e.g. INV-2026-0001)
+// Year-scoped: counter resets to 0001 each new calendar year.
+// Persisted in localStorage so it survives page reloads and stays sequential.
+function getNextInvoiceNo() {
+  const year = new Date().getFullYear();
+  const key  = `pw_inv_seq_${year}`;
+  const current = parseInt(localStorage.getItem(key) || "0", 10);
+  const next = current + 1;
+  localStorage.setItem(key, String(next));
+  return `INV-${year}-${String(next).padStart(4, "0")}`;
+}
+// Peek at what the next invoice number will be WITHOUT incrementing
+function peekNextInvoiceNo() {
+  const year = new Date().getFullYear();
+  const key  = `pw_inv_seq_${year}`;
+  const current = parseInt(localStorage.getItem(key) || "0", 10);
+  return `INV-${year}-${String(current + 1).padStart(4, "0")}`;
+}
+
 function useDebounce(value, delay=350) {
   const [dv, setDv] = useState(value);
   useEffect(() => { const t=setTimeout(()=>setDv(value),delay); return ()=>clearTimeout(t); }, [value,delay]);
@@ -220,6 +309,20 @@ function buildTicketHTML(t) {
 }
 
 /* ══════════════════════════════════════════════
+   ERROR SUMMARY — shows inside modal when errors exist
+══════════════════════════════════════════════ */
+function ErrorSummary({ errors }) {
+  const list = Object.values(errors).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="error-summary">
+      <div className="error-summary-title">{list.length} issue{list.length > 1 ? "s" : ""} to fix before saving:</div>
+      {list.map((msg, i) => <div key={i}>• {msg}</div>)}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════
    DELETE CONFIRM MODAL  (replaces window.confirm)
    FIX SEC-04: Safe, consistent confirmation dialog
 ══════════════════════════════════════════════ */
@@ -259,7 +362,9 @@ function LoginScreen({ onLogin }) {
 
   const submit = async (e) => {
     e && e.preventDefault();
-    if (!email.trim() || !password) { setError("Email and password are required."); return; }
+    if (!email.trim()) { setError("Email address is required."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError("Enter a valid email address."); return; }
+    if (!password) { setError("Password is required."); return; }
     setLoading(true); setError("");
     try {
       const session = await auth.signIn(email.trim(), password);
@@ -359,11 +464,16 @@ function UserManagement({ session, toast }) {
   useEffect(()=>{ loadUsers(); },[loadUsers]);
 
   const validate = () => {
-    const e = {};
-    if (!form.email.trim()) e.email = "Required";
-    if (!form.full_name.trim()) e.full_name = "Required";
-    if (!form.password || form.password.length < 6) e.password = "Min 6 characters";
-    setErrors(e); return Object.keys(e).length === 0;
+    const e = V.run([
+      ["email",     () => V.email(form.email)],
+      ["full_name", () => V.required(form.full_name), () => V.minLen(form.full_name, 2)],
+      ["password",  () => {
+        if (!form.password || form.password.length < 6) return "Minimum 6 characters";
+        return null;
+      }],
+    ]);
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const createUser = async () => {
@@ -798,7 +908,12 @@ const CSS = `
   .form-input:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(240,165,0,0.1)}
   .form-select option{background:var(--surface2)}
   .form-input.error,.form-select.error{border-color:var(--red)!important}
-  .form-error{font-size:11px;color:var(--red)}
+  .form-error{font-size:11px;color:var(--red);margin-top:2px;display:flex;align-items:center;gap:4px}
+  .form-error::before{content:'⚠';font-size:10px}
+  .error-summary{background:rgba(248,81,73,0.08);border:1px solid rgba(248,81,73,0.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--red);line-height:1.7}
+  .error-summary-title{font-weight:700;margin-bottom:4px;font-size:13px}
+  .field-hint{font-size:11px;color:var(--muted);margin-top:2px}
+  .form-input.success,.form-select.success{border-color:var(--green)!important}
   .form-hint{font-size:11px;color:var(--muted)}
 
   /* ══ MODALS ══ */
@@ -1103,7 +1218,21 @@ function CargoRegister({ data, setData, toast, can }) {
   const emptyForm={receivingDate:today(),description:"",unitKg:"",unitPrice:"",qty:"",spec:"",senderName:"",senderLocation:"",senderContact:"",receiverName:"",receiverLocation:"",receiverContact:"",paymentMethod:"Cash",amount:""};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>{const nf={...f,[k]:v};if(k==="unitPrice"||k==="qty"){const p=parseFloat(k==="unitPrice"?v:nf.unitPrice)||0,q=parseFloat(k==="qty"?v:nf.qty)||0;nf.amount=p*q||"";}return nf;});
-  const validate=()=>{const e={};if(!form.senderName.trim())e.senderName="Required";if(!form.receiverName.trim())e.receiverName="Required";if(!form.description)e.description="Required";setErrors(e);return Object.keys(e).length===0;};
+  const validate = () => {
+    const e = V.run([
+      ["receivingDate",  () => V.date(form.receivingDate)],
+      ["description",    () => V.required(form.description)],
+      ["senderName",     () => V.required(form.senderName), () => V.minLen(form.senderName, 2)],
+      ["senderContact",  () => V.phone(form.senderContact)],
+      ["receiverName",   () => V.required(form.receiverName), () => V.minLen(form.receiverName, 2)],
+      ["receiverContact",() => V.phone(form.receiverContact)],
+      ["unitPrice",      () => { if(form.unitPrice!==""&&form.unitPrice!==null) return V.nonNegNum(form.unitPrice); return null; }],
+      ["qty",            () => { if(form.qty!==""&&form.qty!==null) return V.nonNegNum(form.qty); return null; }],
+      ["amount",         () => V.positiveNum(form.amount)],
+    ]);
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
   const submit=async()=>{
     if(!validate()){toast("Please fix form errors","error");return;}
     setSaving(true);
@@ -1142,7 +1271,7 @@ function CargoRegister({ data, setData, toast, can }) {
       {confirmDelete&&<ConfirmModal message="Delete this cargo record? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
       <div className="section-header"><div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div><div className="section-actions"><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button></div></div>
       {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div className="actions-cell"><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span className="btn-label">Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span className="btn-label">Del</span></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div><div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className="form-input" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div><div className="form-group"><label className="form-label">Qty</label><input type="number" className="form-input" value={form.qty} onChange={e=>set("qty",e.target.value)}/></div><div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div><div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className="form-input" value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div><div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className="form-input" value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (SSP)</label><input type="number" className="form-input" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><ErrorSummary errors={errors}/><div className="form-grid"><div className="form-group"><label className="form-label">Date *</label><input type="date" className={`form-input${errors.receivingDate?" error":""}`} value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/>{errors.receivingDate&&<span className="form-error">{errors.receivingDate}</span>}</div><div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div><div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className={`form-input${errors.unitPrice?" error":""}`} value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)} min="0" onKeyDown={blockSci}/>{errors.unitPrice&&<span className="form-error">{errors.unitPrice}</span>}</div><div className="form-group"><label className="form-label">Qty</label><input type="number" className={`form-input${errors.qty?" error":""}`} value={form.qty} onChange={e=>set("qty",e.target.value)} min="0" onKeyDown={blockSci}/>{errors.qty&&<span className="form-error">{errors.qty}</span>}</div><div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div><div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className={`form-input${errors.senderContact?" error":""}`} value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/>{errors.senderContact&&<span className="form-error">{errors.senderContact}</span>}</div><div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div><div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className={`form-input${errors.receiverContact?" error":""}`} value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/>{errors.receiverContact&&<span className="form-error">{errors.receiverContact}</span>}</div><div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (SSP) *</label><input type="number" className={`form-input${errors.amount?" error":""}`} value={form.amount} onChange={e=>set("amount",e.target.value)} min="0" onKeyDown={blockSci}/>{errors.amount&&<span className="form-error">{errors.amount}</span>}</div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div></div></div>)}
     </div>
   );
 }
@@ -1152,13 +1281,36 @@ function Ticketing({ data, setData, toast, can }) {
   // FIX SEC-04: confirmation modal state
   const [confirmDelete,setConfirmDelete]=useState(null);
 
-  // FIX BUG-02: use a function instead of a constant so it's always fresh
-  const getNextTicket = () => 117 + data.length;
+  // AUTO-GENERATED TICKET NUMBER
+  // Derives max ticketNo from the actual data in DB — never from data.length.
+  // This stays correct even after deletions and across multiple users.
+  const getNextTicket = () => {
+    if (!data.length) return 1001; // starting number for first ever ticket
+    const maxNo = Math.max(...data.map(r => Number(r.ticketNo) || 0));
+    return maxNo + 1;
+  };
 
   const emptyForm={ticketNo:getNextTicket(),date:today(),passengerName:"",phone:"",fees:"",weightKg:"",checkInTime:"",departureTime:"",arrivalTime:"",from:"",to:"",flightNo:"",paymentStatus:"Paid",remarks:""};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const validate=()=>{const e={};if(!form.passengerName.trim())e.passengerName="Required";if(!form.from.trim())e.from="Required";if(!form.to.trim())e.to="Required";setErrors(e);return Object.keys(e).length===0;};
+  const validate = () => {
+    const e = V.run([
+      ["date",          () => V.date(form.date)],
+      ["passengerName", () => V.required(form.passengerName), () => V.minLen(form.passengerName, 2)],
+      ["phone",         () => V.phone(form.phone)],
+      ["fees",          () => V.positiveNum(form.fees)],
+      ["from",          () => V.required(form.from)],
+      ["to",            () => V.required(form.to)],
+      ["to",            () => V.notSameRoute(form.from, form.to)],
+    ]);
+    // Cross-field time checks
+    if (form.checkInTime && form.departureTime && form.checkInTime >= form.departureTime)
+      e.departureTime = "Departure must be after check-in time";
+    if (form.departureTime && form.arrivalTime && form.arrivalTime <= form.departureTime)
+      e.arrivalTime = "Arrival must be after departure time";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
   const submit=async()=>{
     if(!validate()){toast("Please fix errors","error");return;}
     setSaving(true);
@@ -1198,7 +1350,15 @@ function Ticketing({ data, setData, toast, can }) {
       {confirmDelete&&<ConfirmModal message="Delete this ticket? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
       <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · $ {fmt(totalFees)}</div></div><div className="section-actions"><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:getNextTicket()});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
       {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (USD)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>$ {fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div className="actions-cell"><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)} title="Print"><Icon name="print" size={13}/><span className="btn-label">Print</span></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span className="btn-label">Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span className="btn-label">Del</span></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>$ {fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid">{[{k:"ticketNo",l:"Ticket No.",t:"number"},{k:"date",l:"Date",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (USD $)",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}<div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><ErrorSummary errors={errors}/><div className="form-grid"><div className="form-group">
+                  <label className="form-label">Ticket No.</label>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <input type="number" className="form-input" value={form.ticketNo||""} readOnly
+                      style={{borderColor:"var(--accent)",background:"rgba(240,165,0,0.06)",fontWeight:700,color:"var(--accent)",cursor:"default",flex:1}}/>
+                    <span style={{fontSize:10,color:"var(--muted)",whiteSpace:"nowrap"}}>Auto</span>
+                  </div>
+                </div>
+                {[{k:"date",l:"Date *",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (USD $) *",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)} min={t==="number"?"0":undefined}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}<div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div></div></div>)}
     </div>
   );
 }
@@ -1212,12 +1372,44 @@ function Bookings({ data, setData, toast, can }) {
   const emptyForm={bookingDate:today(),passengerName:"",phone:"",idPassport:"",from:"",to:"",flightNo:"",departureDate:"",departureTime:"",seatClass:"Economy",luggageKg:"",fare:"",taxes:"",total:0,status:"Booked"};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>{const nf={...f,[k]:v};if(k==="fare"||k==="taxes")nf.total=(parseFloat(k==="fare"?v:nf.fare)||0)+(parseFloat(k==="taxes"?v:nf.taxes)||0);return nf;});
-  const validate=()=>{const e={};if(!form.passengerName.trim())e.passengerName="Required";if(!form.from.trim())e.from="Required";if(!form.to.trim())e.to="Required";setErrors(e);return Object.keys(e).length===0;};
+  const validate = () => {
+    const e = V.run([
+      ["bookingDate",   () => V.date(form.bookingDate)],
+      ["passengerName", () => V.required(form.passengerName), () => V.minLen(form.passengerName, 2)],
+      ["phone",         () => V.phone(form.phone)],
+      ["from",          () => V.required(form.from)],
+      ["to",            () => V.required(form.to)],
+      ["to",            () => V.notSameRoute(form.from, form.to)],
+      ["fare",          () => V.positiveNum(form.fare)],
+      ["luggageKg",     () => V.nonNegNum(form.luggageKg)],
+    ]);
+    // Departure date must not be in the past
+    if (form.departureDate) {
+      const past = V.dateNotPast(form.departureDate);
+      if (past) e.departureDate = past;
+    }
+    // Departure date must be on or after booking date
+    if (form.bookingDate && form.departureDate) {
+      const order = V.dateOrder(form.bookingDate, form.departureDate, "booking date");
+      if (order) e.departureDate = order;
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
   const submit=async()=>{
     if(!validate()){toast("Please fix errors","error");return;}
     setSaving(true);
     try{
-      const id=editing||uid("B"),bkgId=editing?form.bookingId:`BKG-${String(data.length+1).padStart(4,"0")}`,total=(parseFloat(form.fare)||0)+(parseFloat(form.taxes)||0),row={...form,id,bookingId:bkgId,total};
+      // AUTO-GENERATED BOOKING ID: derive from max existing sequence, never from data.length
+      const getNextBookingId = () => {
+        if (!data.length) return "BKG-0001";
+        const maxSeq = Math.max(...data.map(r => {
+          const m = (r.bookingId || "").match(/BKG-(\d+)/);
+          return m ? parseInt(m[1], 10) : 0;
+        }));
+        return `BKG-${String(maxSeq + 1).padStart(4, "0")}`;
+      };
+      const id=editing||uid("B"),bkgId=editing?form.bookingId:getNextBookingId(),total=(parseFloat(form.fare)||0)+(parseFloat(form.taxes)||0),row={...form,id,bookingId:bkgId,total};
       if(editing){
         await sb.update("bookings",editing,toDB.bookings(row));
         setData(d=>d.map(r=>r.id===editing?row:r));
@@ -1249,25 +1441,65 @@ function Bookings({ data, setData, toast, can }) {
       {confirmDelete&&<ConfirmModal message="Delete this booking? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
       <div className="section-header"><div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · $ {fmt(totalRev)}</div></div><div className="section-actions"><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button></div></div>
       {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total ($)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">$ {fmt(r.fare)}</td><td className="mono">$ {fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>$ {fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div className="actions-cell"><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span className="btn-label">Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span className="btn-label">Del</span></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>$ {fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Fare ($)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div><div className="form-group"><label className="form-label">Taxes ($)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div><div className="form-group"><label className="form-label">Total ($)</label><input type="number" className="form-input" value={form.total||0} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><ErrorSummary errors={errors}/><div className="form-grid">
+                <div className="form-group">
+                  <label className="form-label">Booking ID</label>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <input type="text" className="form-input" value={editing?form.bookingId:"AUTO"} readOnly
+                      style={{borderColor:"var(--purple)",background:"rgba(163,113,247,0.06)",fontWeight:700,color:"var(--purple)",cursor:"default",flex:1,letterSpacing:"0.5px"}}/>
+                    {!editing&&<span style={{fontSize:10,color:"var(--muted)",whiteSpace:"nowrap"}}>Auto</span>}
+                  </div>
+                </div>
+                <div className="form-group"><label className="form-label">Date *</label><input type="date" className={`form-input${errors.bookingDate?" error":""}`} value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/>{errors.bookingDate&&<span className="form-error">{errors.bookingDate}</span>}</div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className={`form-input${errors.phone?" error":""}`} value={form.phone||""} onChange={e=>set("phone",e.target.value)}/>{errors.phone&&<span className="form-error">{errors.phone}</span>}</div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className={`form-input${errors.departureDate?" error":""}`} value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/>{errors.departureDate&&<span className="form-error">{errors.departureDate}</span>}</div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className={`form-input${errors.luggageKg?" error":""}`} value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)} min="0" onKeyDown={blockSci}/>{errors.luggageKg&&<span className="form-error">{errors.luggageKg}</span>}</div><div className="form-group"><label className="form-label">Fare ($) *</label><input type="number" className={`form-input${errors.fare?" error":""}`} value={form.fare||""} onChange={e=>set("fare",e.target.value)} min="0" onKeyDown={blockSci}/>{errors.fare&&<span className="form-error">{errors.fare}</span>}</div><div className="form-group"><label className="form-label">Taxes ($)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)} min="0" onKeyDown={blockSci}/></div><div className="form-group"><label className="form-label">Total ($)</label><input type="number" className="form-input" value={form.total||0} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
     </div>
   );
 }
 
 function Invoice({ cargo, tickets, bookings, toast }) {
-  const [form,setForm]=useState({type:"cargo",refId:"",invNo:`INV-${String(Date.now()).slice(-4)}`,invDate:today(),dueDate:"",taxPct:0});
+  // Show the next invoice number immediately (peek, don't increment yet)
+  const [form,setForm]=useState({type:"cargo",refId:"",invNo:peekNextInvoiceNo(),invDate:today(),dueDate:"",taxPct:0});
   const [preview,setPreview]=useState(null);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const allRecords={cargo,tickets,bookings};
   const refs={cargo:cargo.map(r=>({id:r.id,label:`${r.id} – ${r.senderName} → ${r.receiverName}`})),tickets:tickets.map(r=>({id:r.id,label:`Ticket #${r.ticketNo} – ${r.passengerName}`})),bookings:bookings.map(r=>({id:r.id,label:`${r.bookingId} – ${r.passengerName}`}))};
   const buildPreview=()=>{const rec=allRecords[form.type].find(r=>r.id===form.refId);if(!rec){toast("Select a valid record","error");return null;}let lines=[],bill={},amount=0;if(form.type==="cargo"){bill={name:rec.senderName,phone:rec.senderContact,route:`${rec.senderLocation} → ${rec.receiverLocation}`};lines=[{desc:rec.description,date:rec.receivingDate,wt:rec.unitKg,unitPrice:rec.unitPrice,qty:rec.qty,amount:rec.amount}];amount=Number(rec.amount||0);}else if(form.type==="tickets"){bill={name:rec.passengerName,phone:rec.phone,route:`${rec.from} → ${rec.to}`};lines=[{desc:`Flight Ticket – ${rec.from} → ${rec.to}`,date:rec.date,wt:rec.weightKg,unitPrice:rec.fees,qty:1,amount:rec.fees}];amount=Number(rec.fees||0);}else{bill={name:rec.passengerName,phone:rec.phone,route:`${rec.from} → ${rec.to}`};lines=[{desc:`Flight Fare – ${rec.seatClass}`,date:rec.bookingDate,wt:rec.luggageKg,unitPrice:rec.fare,qty:1,amount:rec.fare},{desc:"Taxes & Fees",date:rec.bookingDate,wt:"—",unitPrice:rec.taxes,qty:1,amount:rec.taxes}];amount=Number(rec.total||0);}const tax=amount*(parseFloat(form.taxPct)/100||0);const currency=form.type==="cargo"?"SSP":"$";return{...form,bill,lines,subtotal:amount,tax,grand:amount+tax,currency};};
-  const generate=()=>{const p=buildPreview();if(p){setPreview(p);toast("Invoice generated ✓","success");}};
+  const [invErrors, setInvErrors] = useState({});
+  const generate = () => {
+    // Validate invoice form before generating (issues 26-30)
+    const e = {};
+    if (!form.invNo || !form.invNo.trim()) e.invNo = "Invoice number is required";
+    if (!form.invDate) e.invDate = "Invoice date is required";
+    if (!form.refId) e.refId = "Please select a record";
+    const taxNum = parseFloat(form.taxPct);
+    if (form.taxPct !== "" && (isNaN(taxNum) || taxNum < 0 || taxNum > 100))
+      e.taxPct = "Must be between 0 and 100";
+    if (form.dueDate && form.invDate && form.dueDate < form.invDate)
+      e.dueDate = "Due date must be on or after invoice date";
+    setInvErrors(e);
+    if (Object.keys(e).length > 0) { toast("Please fix invoice form errors", "error"); return; }
+
+    const p = buildPreview();
+    if (p) {
+      const newInvNo = getNextInvoiceNo();
+      setPreview({...p, invNo: form.invNo});
+      setForm(f => ({...f, invNo: newInvNo}));
+      toast("Invoice generated ✓", "success");
+    }
+  };
   const handlePrint=()=>{if(preview)printInNewWindow(buildInvoiceHTML(preview));};
   return (
     <div>
       <div className="section-header"><div><div className="section-title">Invoice Generator</div><div style={{fontSize:12,color:"var(--muted)"}}>Generate &amp; print invoices from any record</div></div></div>
       <div className="invoice-grid">
-        <div className="card"><div style={{fontWeight:700,marginBottom:16,fontSize:14}}>Generate Invoice</div><div className="form-grid"><div className="form-group"><label className="form-label">Invoice No.</label><input className="form-input" value={form.invNo} onChange={e=>set("invNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className="form-input" value={form.invDate} onChange={e=>set("invDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={form.dueDate} onChange={e=>set("dueDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className="form-input" value={form.taxPct} onChange={e=>set("taxPct",e.target.value)}/></div><div className="form-group"><label className="form-label">Record Type</label><select className="form-select" value={form.type} onChange={e=>{set("type",e.target.value);set("refId","");}}><option value="cargo">Cargo</option><option value="tickets">Ticket</option><option value="bookings">Booking</option></select></div><div className="form-group"><label className="form-label">Select Record</label><select className="form-select" value={form.refId} onChange={e=>set("refId",e.target.value)}><option value="">— Choose —</option>{refs[form.type].map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div></div><div style={{marginTop:16}}><button className="btn btn-primary" onClick={generate} style={{width:"100%"}}><Icon name="invoice" size={15}/>Generate Invoice</button></div></div>
+        <div className="card"><div style={{fontWeight:700,marginBottom:16,fontSize:14}}>Generate Invoice</div><div className="form-grid"><div className="form-group">
+                  <label className="form-label">Invoice No.</label>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    <input className={`form-input${invErrors.invNo?" error":""}`} value={form.invNo} onChange={e=>set("invNo",e.target.value)}
+                      style={{borderColor:invErrors.invNo?"var(--red)":"var(--accent)",background:"rgba(240,165,0,0.06)",fontWeight:700,color:"var(--accent)",letterSpacing:"0.5px",flex:1}}/>
+                    <span style={{fontSize:10,color:"var(--muted)",whiteSpace:"nowrap",lineHeight:1.4,textAlign:"center"}}>Auto<br/>seq.</span>
+                  </div>
+                  {invErrors.invNo&&<span className="form-error">{invErrors.invNo}</span>}
+                </div><div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className={`form-input${invErrors.invDate?" error":""}`} value={form.invDate} onChange={e=>set("invDate",e.target.value)}/>{invErrors.invDate&&<span className="form-error">{invErrors.invDate}</span>}</div><div className="form-group"><label className="form-label">Due Date</label><input type="date" className={`form-input${invErrors.dueDate?" error":""}`} value={form.dueDate} onChange={e=>set("dueDate",e.target.value)}/>{invErrors.dueDate&&<span className="form-error">{invErrors.dueDate}</span>}</div><div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className={`form-input${invErrors.taxPct?" error":""}`} value={form.taxPct} onChange={e=>set("taxPct",e.target.value)} min="0" max="100"/>{invErrors.taxPct&&<span className="form-error">{invErrors.taxPct}</span>}</div><div className="form-group"><label className="form-label">Record Type</label><select className="form-select" value={form.type} onChange={e=>{set("type",e.target.value);set("refId","");}}><option value="cargo">Cargo</option><option value="tickets">Ticket</option><option value="bookings">Booking</option></select></div><div className="form-group"><label className="form-label">Select Record</label><select className={`form-select${invErrors.refId?" error":""}`} value={form.refId} onChange={e=>set("refId",e.target.value)}><option value="">— Choose —</option>{refs[form.type].map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select>{invErrors.refId&&<span className="form-error">{invErrors.refId}</span>}</div></div><div style={{marginTop:16}}><button className="btn btn-primary" onClick={generate} style={{width:"100%"}}><Icon name="invoice" size={15}/>Generate Invoice</button></div></div>
         {preview?(<div style={{overflowY:"auto"}}><div className="invoice-paper"><div className="inv-header"><div><div className="inv-company-name">PERWAANI</div><div style={{fontWeight:700,fontSize:13,color:"#333"}}>General Trading &amp; Investment Co. Ltd</div><div className="inv-address">Juba Airport Road, South Sudan<br/>perwaani2023@gmail.com · +211 (0) 920 000 149</div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase"}}>Invoice</div><div className="inv-no">{preview.invNo}</div><div className="inv-label">Date</div><div className="inv-val">{preview.invDate}</div>{preview.dueDate&&<><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20,paddingBottom:16,borderBottom:"1px solid #eee"}}><div><div className="inv-label">Bill To</div><div style={{fontSize:15,fontWeight:700,marginTop:4,color:"#111"}}>{preview.bill.name}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.phone}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.route}</div></div><div><div className="inv-label">Payment Details</div><div style={{fontSize:12,marginTop:4,color:"#333"}}><span style={{color:"#888"}}>Method: </span>Cash / Mobile Money</div><div style={{fontSize:12,color:"#333"}}><span style={{color:"#888"}}>Ref: </span>{preview.invNo}</div></div></div><table className="inv-table"><thead><tr><th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price ({preview.currency})</th><th>Qty</th><th style={{textAlign:"right"}}>Amount ({preview.currency})</th></tr></thead><tbody>{preview.lines.map((l,i)=>(<tr key={i}><td>{i+1}</td><td>{l.desc||"—"}</td><td>{l.date||"—"}</td><td>{l.wt||"—"}</td><td>{preview.currency} {fmt(l.unitPrice)}</td><td>{l.qty||1}</td><td style={{textAlign:"right",fontWeight:600}}>{preview.currency} {fmt(l.amount)}</td></tr>))}</tbody><tfoot><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Subtotal</td><td style={{textAlign:"right"}}>{preview.currency} {fmt(preview.subtotal)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Tax ({preview.taxPct}%)</td><td style={{textAlign:"right"}}>{preview.currency} {fmt(preview.tax)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",fontWeight:700}}>GRAND TOTAL ({preview.currency})</td><td style={{textAlign:"right",fontWeight:800,color:"#c48b00"}}>{preview.currency} {fmt(preview.grand)}</td></tr></tfoot></table><div className="inv-footer">Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br/>This invoice is official proof of payment. Payment due within 30 days.</div></div><div style={{display:"flex",justifyContent:"center",marginTop:12}}><button className="btn btn-primary" onClick={handlePrint}><Icon name="print" size={15}/>Print Invoice</button></div></div>):(<div className="card" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300}}><div className="empty"><Icon name="invoice" size={40}/><h3>No invoice yet</h3><p>Select a record and click Generate Invoice.</p></div></div>)}
       </div>
     </div>
