@@ -129,6 +129,17 @@ function useDebounce(value, delay=350) {
   return dv;
 }
 
+// RESPONSIVE FIX 1: reactive mobile detection — re-renders on resize
+function useIsMobile(breakpoint=768) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= breakpoint);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", handler, { passive: true });
+    return () => window.removeEventListener("resize", handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 
 /* ══════════════════════════════════════════════
    AUTH CSS
@@ -467,7 +478,7 @@ function UserManagement({ session, toast }) {
       )}
       <div className="section-header">
         <div><div className="section-title">User Management</div><div style={{fontSize:12,color:"var(--muted)"}}>{users.length} users · Admin only</div></div>
-        <button className="btn btn-primary" onClick={()=>setShowForm(true)}><Icon name="plus" size={15}/>Add User</button>
+        <div className="section-actions"><button className="btn btn-primary" onClick={()=>setShowForm(true)}><Icon name="plus" size={15}/>Add User</button></div>
       </div>
       {loading ? <div className="card" style={{textAlign:"center",padding:40}}><span className="spinner"/></div> : (
         <div className="card">
@@ -603,191 +614,302 @@ const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
   :root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2230;--border:#30363d;--accent:#f0a500;--accent2:#e05c00;--green:#3fb950;--blue:#58a6ff;--red:#f85149;--purple:#a371f7;--text:#e6edf3;--muted:#8b949e;--card-shadow:0 4px 24px rgba(0,0,0,0.4)}
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text)}
-  .app{display:flex;min-height:100vh}
+  body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%}
+  .app{display:flex;min-height:100vh;min-height:100dvh}
 
-  /* ── SIDEBAR ── */
-  .sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;transition:width 0.3s ease}
-  /* FIX BUG-12: explicit desktop expanded/collapsed classes */
+  /* ══ SIDEBAR ══ */
+  .sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;height:100dvh;overflow-y:auto;transition:width 0.25s ease,min-width 0.25s ease;z-index:50;flex-shrink:0}
   .sidebar.expanded{width:240px;min-width:240px}
-  .sidebar.collapsed{width:64px;min-width:64px}
-
-  .sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
-  .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#000;flex-shrink:0}
-  .logo-title{font-weight:700;font-size:13px;color:var(--accent)}.logo-sub{font-size:10px;color:var(--muted)}
-  .nav{padding:12px 8px;flex:1}
-  .nav-section{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:8px 8px 4px}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;transition:all 0.15s;color:var(--muted);font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden}
+  .sidebar.collapsed{width:64px;min-width:64px;overflow:hidden}
+  .sidebar-logo{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;min-height:60px}
+  .logo-icon{width:36px;height:36px;min-width:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#000;flex-shrink:0}
+  .logo-title{font-weight:700;font-size:13px;color:var(--accent);white-space:nowrap;overflow:hidden}
+  .logo-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden}
+  .nav{padding:10px 8px;flex:1;overflow-y:auto}
+  .nav-section{font-size:10px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;padding:8px 8px 4px;white-space:nowrap;overflow:hidden}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;cursor:pointer;transition:all 0.15s;color:var(--muted);font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;min-height:44px;position:relative}
   .nav-item:hover{background:var(--surface2);color:var(--text)}
   .nav-item.active{background:rgba(240,165,0,0.12);color:var(--accent)}
-  .nav-item .icon{flex-shrink:0}
-  .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
-  .sidebar-footer a{color:var(--blue);text-decoration:none}
+  .nav-item .icon{flex-shrink:0;display:flex;align-items:center}
+  /* collapsed sidebar tooltips on desktop */
+  .sidebar.collapsed .nav-item{justify-content:center;padding:10px 0}
+  .sidebar.collapsed .nav-item::after{content:attr(data-label);position:absolute;left:70px;background:var(--surface2);color:var(--text);font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;border:1px solid var(--border);white-space:nowrap;pointer-events:none;opacity:0;transition:opacity 0.15s;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
+  .sidebar.collapsed .nav-item:hover::after{opacity:1}
+  .sidebar-footer{padding:12px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
 
-  .main{flex:1;display:flex;flex-direction:column;min-width:0}
-  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
-  .topbar-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
-  .topbar-center{flex:1;max-width:500px}
-  .topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto}
-  .page-title{font-size:17px;font-weight:700}.page-sub{font-size:11px;color:var(--muted)}
+  /* ══ LAYOUT ══ */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:40;min-height:56px;flex-wrap:wrap}
+  .topbar-left{display:flex;align-items:center;gap:10px;flex-shrink:0;padding:10px 0}
+  .topbar-center{flex:1;max-width:480px;padding:8px 0}
+  .topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;padding:10px 0}
+  .topbar-date{font-size:12px;color:var(--muted)}
+  .page-title{font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+  .page-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ══ GLOBAL SEARCH ══ */
   .global-search{position:relative;width:100%}
   .global-search input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:9px 36px 9px 38px;font-family:'Sora',sans-serif;font-size:13px;outline:none;transition:border 0.15s}
   .global-search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(240,165,0,0.1)}
   .gs-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
-  .gs-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);cursor:pointer;background:none;border:none;padding:2px;display:flex;align-items:center}
+  .gs-clear{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);cursor:pointer;background:none;border:none;padding:4px;display:flex;align-items:center}
   .gs-clear:hover{color:var(--text)}
-  .search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.55);z-index:300;max-height:420px;overflow-y:auto}
+  .search-results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.55);z-index:300;max-height:380px;overflow-y:auto}
   .sr-section{padding:6px 0}
   .sr-section-title{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;padding:4px 14px 6px}
-  .sr-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;transition:background 0.1s}
+  .sr-item{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background 0.1s;min-height:44px}
   .sr-item:hover{background:var(--surface2)}
   .sr-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;flex-shrink:0}
   .sr-main{font-size:13px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .sr-sub{font-size:11px;color:var(--muted);white-space:nowrap;margin-right:8px}
+  .sr-sub{font-size:11px;color:var(--muted);white-space:nowrap;margin-right:8px;display:none}
   .sr-amt{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
   .sr-empty{padding:24px;text-align:center;color:var(--muted);font-size:13px}
   .sr-divider{border:none;border-top:1px solid var(--border);margin:0}
-  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;white-space:nowrap}
+
+  /* ══ BUTTONS ══ */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;border-radius:8px;font-family:'Sora',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;white-space:nowrap;min-height:36px;touch-action:manipulation}
   .btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
-  .btn-primary{background:var(--accent);color:#000}.btn-primary:hover:not(:disabled){background:#f5b800;transform:translateY(-1px)}
-  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover{background:var(--border)}
-  .btn-danger{background:rgba(248,81,73,0.15);color:var(--red);border:1px solid rgba(248,81,73,0.3)}.btn-danger:hover{background:rgba(248,81,73,0.25)}
-  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:var(--text);border-color:var(--muted)}
-  .btn-sm{padding:5px 10px;font-size:12px}
-  .content{padding:24px;flex:1;overflow-x:hidden}
+  .btn-primary{background:var(--accent);color:#000}.btn-primary:hover:not(:disabled){background:#f5b800}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-secondary:hover:not(:disabled){background:var(--border)}
+  .btn-danger{background:rgba(248,81,73,0.12);color:var(--red);border:1px solid rgba(248,81,73,0.25)}.btn-danger:hover:not(:disabled){background:rgba(248,81,73,0.22)}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover:not(:disabled){color:var(--text);border-color:var(--muted)}
+  .btn-sm{padding:5px 10px;font-size:12px;min-height:32px}
+  .btn-icon{padding:6px;min-height:32px;min-width:32px}
+
+  /* ══ CONTENT ══ */
+  .content{padding:20px;flex:1;overflow-x:hidden}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:var(--card-shadow)}
-  .grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
-  .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+
+  /* ══ GRIDS ══ */
+  .grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .invoice-grid{display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start}
+
+  /* ══ KPI ══ */
   .kpi{position:relative;overflow:hidden}
   .kpi::before{content:'';position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;opacity:0.08}
   .kpi.gold::before{background:var(--accent)}.kpi.green::before{background:var(--green)}.kpi.blue::before{background:var(--blue)}.kpi.purple::before{background:var(--purple)}
-  .kpi-label{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase}
-  .kpi-val{font-size:26px;font-weight:700;font-family:'JetBrains Mono',monospace;margin:6px 0 4px}
-  .kpi-icon{position:absolute;right:16px;top:16px;opacity:0.25}
+  .kpi-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:0.5px;text-transform:uppercase}
+  .kpi-val{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;margin:6px 0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .kpi-sub{font-size:11px;color:var(--muted)}
+  .kpi-icon{position:absolute;right:14px;top:14px;opacity:0.2}
   .kpi.gold .kpi-val{color:var(--accent)}.kpi.green .kpi-val{color:var(--green)}.kpi.blue .kpi-val{color:var(--blue)}.kpi.purple .kpi-val{color:var(--purple)}
-  .table-wrap{overflow-x:auto}
+
+  /* ══ TABLES ══ */
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:0 0 8px 8px}
   table{width:100%;border-collapse:collapse;font-size:13px}
-  thead th{background:var(--surface2);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap}
+  thead th{background:var(--surface2);color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
   tbody tr{border-bottom:1px solid rgba(48,54,61,0.5);transition:background 0.1s}
   tbody tr:hover{background:rgba(255,255,255,0.03)}
   tbody td{padding:10px 12px;color:var(--text);vertical-align:middle}
+  .actions-cell{display:flex;gap:4px;flex-wrap:nowrap;align-items:center}
   .mono{font-family:'JetBrains Mono',monospace;font-size:12px}
-  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+
+  /* ══ BADGES ══ */
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
   .badge-green{background:rgba(63,185,80,0.12);color:var(--green)}.badge-amber{background:rgba(240,165,0,0.12);color:var(--accent)}.badge-red{background:rgba(248,81,73,0.12);color:var(--red)}.badge-blue{background:rgba(88,166,255,0.12);color:var(--blue)}.badge-purple{background:rgba(163,113,247,0.12);color:var(--purple)}.badge-muted{background:rgba(139,148,158,0.12);color:var(--muted)}
-  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-  .form-group{display:flex;flex-direction:column;gap:6px}
-  .form-label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
-  .form-input,.form-select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-family:'Sora',sans-serif;font-size:13.5px;transition:border 0.15s;outline:none}
+
+  /* ══ FORMS ══ */
+  .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+  .form-grid-1{grid-template-columns:1fr}
+  .form-group{display:flex;flex-direction:column;gap:5px}
+  .form-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px}
+  .form-input,.form-select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:10px 12px;font-family:'Sora',sans-serif;font-size:14px;transition:border 0.15s;outline:none;width:100%;min-height:42px}
   .form-input:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(240,165,0,0.1)}
   .form-select option{background:var(--surface2)}
   .form-input.error,.form-select.error{border-color:var(--red)!important}
-  .form-error{font-size:11px;color:var(--red);margin-top:2px}
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
-  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);animation:popIn 0.2s ease}
-  @keyframes popIn{from{opacity:0;transform:scale(0.95) translateY(10px)}to{opacity:1;transform:none}}
-  .modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-  .modal-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
-  .modal-body{padding:24px}
-  .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
-  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
-  .section-title{font-size:16px;font-weight:700}
-  .search-wrap{position:relative}.search-wrap input{padding-left:36px}
+  .form-error{font-size:11px;color:var(--red)}
+  .form-hint{font-size:11px;color:var(--muted)}
+
+  /* ══ MODALS ══ */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:760px;max-height:90dvh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);animation:popIn 0.2s ease}
+  @keyframes popIn{from{opacity:0;transform:scale(0.96) translateY(8px)}to{opacity:1;transform:none}}
+  .modal-header{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:2;border-radius:16px 16px 0 0}
+  .modal-title{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .modal-body{padding:20px 22px}
+  .modal-footer{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;position:sticky;bottom:0;background:var(--surface);z-index:2;border-radius:0 0 16px 16px}
+
+  /* ══ SECTION HEADERS ══ */
+  .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+  .section-title{font-size:15px;font-weight:700}
+  .section-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .search-wrap{position:relative;flex:1;min-width:160px}
+  .search-wrap input{padding-left:34px;width:100%}
   .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+
+  /* ══ MISC ══ */
   .progress-bar{background:var(--surface2);border-radius:100px;height:6px;overflow:hidden}
   .progress-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width 0.4s}
-  .divider{border:none;border-top:1px solid var(--border);margin:20px 0}
-  .bar-chart{display:flex;align-items:flex-end;gap:8px;height:100px;padding:8px 0}
-  .bar{flex:1;border-radius:4px 4px 0 0;transition:all 0.3s;min-width:20px}
-  .bar-label{text-align:center;font-size:10px;color:var(--muted);margin-top:4px}
-
-  /* ── MOBILE SIDEBAR OVERLAY ──
-     FIX BUG-01: overlay is hidden by default; JS sets display:block only on mobile */
+  .divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+  .bar-chart{display:flex;align-items:flex-end;gap:6px;height:80px;padding:6px 0}
+  .bar{flex:1;border-radius:4px 4px 0 0;transition:height 0.3s;min-width:12px}
+  .bar-label{text-align:center;font-size:9px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:49;backdrop-filter:blur(2px)}
+  .db-banner{background:linear-gradient(135deg,rgba(88,166,255,0.07),rgba(163,113,247,0.07));border:1px solid rgba(88,166,255,0.2);border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+  .stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(48,54,61,0.4)}
+  .stat-row:last-child{border-bottom:none}
+  .stat-num{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600}
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .glow{box-shadow:0 0 20px rgba(240,165,0,0.15)}
+  .toast{position:fixed;bottom:20px;right:20px;z-index:999;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;animation:slideUp 0.3s ease;max-width:calc(100vw - 40px)}
+  @keyframes slideUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+  .toast.success{border-color:var(--green);color:var(--green)}.toast.error{border-color:var(--red);color:var(--red)}
+  .empty{text-align:center;padding:48px 20px;color:var(--muted)}
+  .empty h3{font-size:15px;font-weight:600;margin-bottom:6px;color:var(--text)}.empty p{font-size:13px}
+  .payment-pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
+  .pill-cash{background:rgba(63,185,80,0.15);color:var(--green)}.pill-mobile{background:rgba(88,166,255,0.15);color:var(--blue)}.pill-bank{background:rgba(163,113,247,0.15);color:var(--purple)}.pill-credit{background:rgba(240,165,0,0.15);color:var(--accent)}.pill-birr{background:rgba(248,81,73,0.15);color:var(--red)}
+  .tag{display:inline-flex;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(240,165,0,0.12);color:var(--accent);white-space:nowrap}
 
-  /* ── TABLET ── */
-  @media(max-width:900px){.topbar-center{max-width:280px}}
+  /* ══ INVOICE PREVIEW ══ */
+  .invoice-paper{width:100%;max-width:860px;margin:auto;background:#fff;color:#111;padding:24px 28px;font-family:Arial,sans-serif;font-size:13px;border:1px solid #ddd;border-radius:8px}
+  .invoice-paper *{color:inherit}
+  .inv-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #d9a000;padding-bottom:12px;margin-bottom:16px;flex-wrap:wrap;gap:12px}
+  .inv-company-name{font-size:22px;font-weight:800;color:#c48b00;margin-bottom:4px}
+  .inv-address{font-size:12px;line-height:1.6;color:#555}
+  .inv-no{font-size:26px;font-weight:800;color:#c48b00;text-align:right}
+  .inv-label{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;margin-top:6px}
+  .inv-val{font-size:13px;font-weight:600;color:#111}
+  .inv-bill-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #eee}
+  .inv-table{width:100%;border-collapse:collapse;margin-top:8px}
+  .inv-table th{background:#f5f5f5;color:#333;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd;border-top:1px solid #ddd;text-align:left;white-space:nowrap}
+  .inv-table td{padding:8px 10px;font-size:12px;color:#111;border-bottom:1px solid #eee;vertical-align:middle}
+  .inv-table tfoot td{color:#111;font-size:13px;border-bottom:none;padding:5px 10px}
+  .inv-table tfoot tr:last-child td{border-top:2px solid #222;font-size:15px;font-weight:800;color:#c48b00;padding-top:10px}
+  .inv-footer{margin-top:24px;text-align:center;font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:10px;line-height:1.7}
 
-  /* ── MOBILE ── */
-  @media(max-width:768px){
-    /* FIX BUG-12: on mobile sidebar uses transform, not width */
-    .sidebar{position:fixed;z-index:50;height:100vh;transform:translateX(-100%);transition:transform 0.28s ease;width:240px!important;min-width:240px!important}
-    .sidebar.expanded{transform:translateX(0)}
-    .main{width:100%}
-    .topbar{flex-wrap:wrap;padding:10px 14px;gap:8px}
-    .topbar-left{flex:1;min-width:0}
-    .topbar-center{order:3;flex:0 0 100%;max-width:100%}
-    .topbar-right{flex-shrink:0}
-    .page-title{font-size:15px}
-    .page-sub{display:none}
-    .content{padding:14px}
-    .grid-4{grid-template-columns:1fr 1fr}
-    .grid-2{grid-template-columns:1fr}
-    .kpi-val{font-size:20px}
-    .section-header{flex-direction:column;align-items:flex-start}
-    .section-header>div:last-child{width:100%;display:flex;flex-wrap:wrap;gap:8px}
-    .section-header .search-wrap{width:100%}
-    .section-header .search-wrap input{width:100%!important}
-    .section-header .btn{flex:1;justify-content:center}
-    .overlay{padding:0;align-items:flex-end}
-    .modal{border-radius:16px 16px 0 0;max-height:92vh;width:100%}
-    .modal-body{padding:16px}
-    .modal-header{padding:16px}
-    .modal-footer{padding:12px 16px}
-    .form-grid{grid-template-columns:1fr}
-    .db-banner{padding:10px 12px;gap:8px}
-    .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-    table{font-size:12px;min-width:500px}
-    thead th{padding:8px;font-size:10px}
-    tbody td{padding:8px}
-    .toast{bottom:16px;right:12px;left:12px;font-size:12px}
-  }
-  /* ── SMALL PHONES ── */
-  @media(max-width:480px){
-    .grid-4{grid-template-columns:1fr}
-    .kpi-val{font-size:18px}
-    .content{padding:10px}
-    .card{padding:14px}
-    .btn{font-size:12px;padding:7px 12px}
-    .btn-sm{padding:4px 8px;font-size:11px}
-  }
-  /* ── PRINT ── */
+  /* ══ SCROLLBAR ══ */
+  ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+
+  /* ══ PRINT ══ */
   @media print{
-    .sidebar,.topbar,.sidebar-overlay{display:none!important}
+    .sidebar,.topbar,.sidebar-overlay,.btn{display:none!important}
     .main{display:block!important}
     .content{padding:0!important}
     body{background:#fff!important}
     thead th{background:#f5f5f5!important;color:#333!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
-  ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
-  .glow{box-shadow:0 0 20px rgba(240,165,0,0.15)}
-  .toast{position:fixed;bottom:24px;right:24px;z-index:999;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;font-weight:500;box-shadow:0 8px 32px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;animation:slideUp 0.3s ease}
-  @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
-  .toast.success{border-color:var(--green);color:var(--green)}.toast.error{border-color:var(--red);color:var(--red)}
-  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
-  .empty h3{font-size:15px;font-weight:600;margin-bottom:6px;color:var(--text)}.empty p{font-size:13px}
-  .payment-pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
-  .pill-cash{background:rgba(63,185,80,0.15);color:var(--green)}.pill-mobile{background:rgba(88,166,255,0.15);color:var(--blue)}.pill-bank{background:rgba(163,113,247,0.15);color:var(--purple)}.pill-credit{background:rgba(240,165,0,0.15);color:var(--accent)}.pill-birr{background:rgba(248,81,73,0.15);color:var(--red)}
-  .tag{display:inline-flex;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:rgba(240,165,0,0.12);color:var(--accent)}
-  .db-banner{background:linear-gradient(135deg,rgba(88,166,255,0.07),rgba(163,113,247,0.07));border:1px solid rgba(88,166,255,0.2);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:12px;margin-bottom:20px}
-  .stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(48,54,61,0.4)}
-  .stat-row:last-child{border-bottom:none}
-  .stat-name{font-size:13px;color:var(--muted)}.stat-num{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600}
-  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .invoice-paper{width:100%;max-width:860px;margin:auto;background:#fff;color:#111;padding:28px 32px;font-family:Arial,sans-serif;font-size:13px;border:1px solid #ddd;border-radius:8px}
-  .invoice-paper *{color:inherit}
-  .inv-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #d9a000;padding-bottom:14px;margin-bottom:20px}
-  .inv-company-name{font-size:24px;font-weight:800;color:#c48b00;margin-bottom:4px}
-  .inv-address{font-size:12px;line-height:1.6;color:#555}
-  .inv-no{font-size:28px;font-weight:800;color:#c48b00;text-align:right}
-  .inv-label{font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;margin-top:6px}
-  .inv-val{font-size:13px;font-weight:600;color:#111}
-  .inv-table{width:100%;border-collapse:collapse;margin-top:10px}
-  .inv-table th{background:#f5f5f5;color:#333;padding:8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ddd;border-top:1px solid #ddd;text-align:left;white-space:nowrap}
-  .inv-table td{padding:8px 10px;font-size:12px;color:#111;border-bottom:1px solid #eee;vertical-align:middle}
-  .inv-table tfoot td{color:#111;font-size:13px;border-bottom:none;padding:5px 10px}
-  .inv-table tfoot tr:last-child td{border-top:2px solid #222;font-size:16px;font-weight:800;color:#c48b00;padding-top:10px}
-  .inv-footer{margin-top:32px;text-align:center;font-size:11px;color:#777;border-top:1px solid #ddd;padding-top:12px;line-height:1.7}
+
+  /* ════════════════════════════════════════
+     RESPONSIVE BREAKPOINTS
+  ════════════════════════════════════════ */
+
+  /* ── WIDE DESKTOP (1400px+) ── */
+  @media(min-width:1400px){
+    .grid-4{grid-template-columns:repeat(4,1fr)}
+    .kpi-val{font-size:26px}
+  }
+
+  /* ── LAPTOP (1100px–1400px) ── */
+  @media(max-width:1200px){
+    .grid-4{grid-template-columns:repeat(2,1fr)}
+    .invoice-grid{grid-template-columns:1fr}
+  }
+
+  /* ── TABLET LANDSCAPE (900px–1100px) ── */
+  @media(max-width:1100px){
+    .sidebar.expanded{width:200px;min-width:200px}
+    .topbar-center{max-width:320px}
+    .sr-sub{display:none}
+  }
+
+  /* ── TABLET PORTRAIT (768px–900px) ── */
+  @media(max-width:900px){
+    .topbar-date{display:none}
+    .topbar-center{max-width:260px}
+    .grid-4{grid-template-columns:repeat(2,1fr)}
+    .grid-2{grid-template-columns:1fr}
+    .invoice-grid{grid-template-columns:1fr}
+  }
+
+  /* ── MOBILE (≤768px) ── */
+  @media(max-width:768px){
+    /* Sidebar becomes a drawer */
+    .sidebar{position:fixed;z-index:50;height:100dvh;transform:translateX(-100%);transition:transform 0.28s ease;width:260px!important;min-width:260px!important;box-shadow:none}
+    .sidebar.expanded{transform:translateX(0);box-shadow:8px 0 32px rgba(0,0,0,0.5)}
+    .sidebar.collapsed{transform:translateX(-100%)}
+    .sidebar-overlay{display:block;opacity:0;pointer-events:none;transition:opacity 0.28s}
+    .sidebar-overlay.visible{opacity:1;pointer-events:auto}
+
+    /* Main takes full width */
+    .main{width:100%;min-width:0}
+
+    /* Topbar: 2 rows — top: hamburger+title+right-actions  bottom: search */
+    .topbar{padding:0 12px;flex-wrap:wrap;gap:0}
+    .topbar-left{padding:10px 0;flex:1;min-width:0;gap:8px}
+    .topbar-center{order:3;flex:0 0 100%;padding:0 0 10px;max-width:100%}
+    .topbar-right{padding:10px 0;gap:6px}
+    .page-title{font-size:14px;max-width:140px}
+    .page-sub{display:none}
+
+    /* Content */
+    .content{padding:12px}
+
+    /* Grids */
+    .grid-4{grid-template-columns:1fr 1fr;gap:10px}
+    .grid-2{grid-template-columns:1fr;gap:10px}
+    .invoice-grid{grid-template-columns:1fr}
+
+    /* KPI */
+    .kpi-val{font-size:18px}
+    .kpi-icon{display:none}
+    .card{padding:14px}
+
+    /* Section headers stack */
+    .section-header{flex-direction:column;align-items:stretch;gap:8px}
+    .section-actions{width:100%;flex-wrap:wrap}
+    .section-actions .btn{flex:1;min-width:120px}
+    .search-wrap{min-width:0;width:100%}
+
+    /* Tables: scroll with sticky first column */
+    .table-wrap{border-radius:8px}
+    table{font-size:12px}
+    thead th{padding:8px 10px;font-size:10px}
+    tbody td{padding:8px 10px}
+
+    /* Action buttons — icon-only on narrow screens */
+    .actions-cell{gap:3px}
+    .btn-label{display:none}
+
+    /* Modals: full-height sheet from bottom */
+    .overlay{padding:0;align-items:flex-end;background:rgba(0,0,0,0.6)}
+    .modal{border-radius:20px 20px 0 0;max-height:92dvh;width:100%;max-width:100%}
+    .modal-header{border-radius:20px 20px 0 0;padding:16px 18px}
+    .modal-body{padding:14px 18px}
+    .modal-footer{padding:12px 18px}
+    .form-grid{grid-template-columns:1fr}
+
+    /* db-banner */
+    .db-banner{font-size:12px;padding:10px 12px;gap:8px}
+
+    /* Toast full-width */
+    .toast{bottom:12px;right:10px;left:10px;max-width:none;font-size:12px}
+  }
+
+  /* ── SMALL PHONES (≤480px) ── */
+  @media(max-width:480px){
+    .grid-4{grid-template-columns:1fr}
+    .kpi-val{font-size:17px}
+    .content{padding:10px}
+    .card{padding:12px}
+    .btn{font-size:12px;padding:7px 11px;min-height:38px}
+    .btn-sm{padding:5px 8px;font-size:11px;min-height:32px}
+    .topbar-right .badge{display:none}
+    .topbar-right .badge:first-child{display:inline-flex}
+    .page-title{max-width:110px}
+    .section-actions .btn{min-width:100px}
+    .invoice-grid{grid-template-columns:1fr}
+  }
+
+  /* ── VERY SMALL (≤360px) ── */
+  @media(max-width:360px){
+    .content{padding:8px}
+    .card{padding:10px;border-radius:10px}
+    .grid-4{grid-template-columns:1fr}
+    .kpi-val{font-size:16px}
+    .topbar{padding:0 8px}
+  }
 `;
 
 const PayPill = ({ method }) => {
@@ -860,13 +982,13 @@ function Dashboard({ cargo, tickets, bookings }) {
   return (
     <div>
       <div className="db-banner"><Icon name="db" size={22}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>Connected to Supabase · Cloud Database</div><div style={{fontSize:11,color:"var(--muted)"}}>All data stored in real-time cloud database — syncs across all devices.</div></div><span className="badge badge-green"><Icon name="check" size={12}/>Live</span></div>
-      <div className="grid-4" style={{marginBottom:20}}>
-        <div className="card kpi gold glow"><div className="kpi-icon"><Icon name="money" size={40}/></div><div className="kpi-label">Combined Revenue</div><div className="kpi-val">$ {fmt(combined)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>Cargo + Tickets + Bookings</div></div>
-        <div className="card kpi green"><div className="kpi-icon"><Icon name="cargo" size={40}/></div><div className="kpi-label">Cargo Revenue</div><div className="kpi-val">SSP {fmt(cRev)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>{cargo.length} shipments</div></div>
-        <div className="card kpi blue"><div className="kpi-icon"><Icon name="plane" size={40}/></div><div className="kpi-label">Ticket Revenue</div><div className="kpi-val">$ {fmt(tRev)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>{tickets.length} passengers</div></div>
-        <div className="card kpi purple"><div className="kpi-icon"><Icon name="booking" size={40}/></div><div className="kpi-label">Booking Revenue</div><div className="kpi-val">$ {fmt(bRev)}</div><div style={{fontSize:12,color:"var(--muted)",marginTop:4}}>{bookings.length} bookings</div></div>
+      <div className="grid-4" style={{marginBottom:16}}>
+        <div className="card kpi gold glow"><div className="kpi-icon"><Icon name="money" size={40}/></div><div className="kpi-label">Combined Revenue</div><div className="kpi-val">$ {fmt(combined)}</div><div className="kpi-sub">Cargo + Tickets + Bookings</div></div>
+        <div className="card kpi green"><div className="kpi-icon"><Icon name="cargo" size={40}/></div><div className="kpi-label">Cargo Revenue</div><div className="kpi-val">SSP {fmt(cRev)}</div><div className="kpi-sub">{cargo.length} shipments</div></div>
+        <div className="card kpi blue"><div className="kpi-icon"><Icon name="plane" size={40}/></div><div className="kpi-label">Ticket Revenue</div><div className="kpi-val">$ {fmt(tRev)}</div><div className="kpi-sub">{tickets.length} passengers</div></div>
+        <div className="card kpi purple"><div className="kpi-icon"><Icon name="booking" size={40}/></div><div className="kpi-label">Booking Revenue</div><div className="kpi-val">$ {fmt(bRev)}</div><div className="kpi-sub">{bookings.length} bookings</div></div>
       </div>
-      <div className="grid-2" style={{marginBottom:20}}>
+      <div className="grid-2" style={{marginBottom:16}}>
         <div className="card"><div className="section-header"><div className="section-title">Revenue vs Target</div><span className="badge badge-amber">Target: $ 20,000,000</span></div><div style={{marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"var(--muted)",marginBottom:6}}><span>$ {fmt(combined)}</span><span>{pct.toFixed(1)}%</span></div><div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`}}/></div></div><div className="bar-chart" style={{marginTop:16}}>{bars.map(b=>(<div key={b.label} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center"}}><div className="bar" style={{background:b.color,height:`${Math.max(4,(b.val/barMax)*90)}px`,width:"100%"}}/><div className="bar-label">{b.label}</div></div>))}</div></div>
         <div className="card"><div className="section-title" style={{marginBottom:12}}>Payment Breakdown</div>{Object.keys(payBreak).length===0?<div style={{color:"var(--muted)",fontSize:13}}>No data yet.</div>:Object.entries(payBreak).map(([k,v])=>(<div className="stat-row" key={k}><PayPill method={k}/><span className="stat-num">SSP {fmt(v)}</span></div>))}<hr className="divider"/><div className="section-title" style={{marginBottom:12}}>Cargo Item Types</div>{Object.keys(itemBreak).length===0?<div style={{color:"var(--muted)",fontSize:13}}>No data yet.</div>:Object.entries(itemBreak).slice(0,5).map(([k,v])=>(<div className="stat-row" key={k}><span style={{fontSize:13,color:"var(--muted)"}}>{k}</span><span className="stat-num">{v} shipment{v>1?"s":""}</span></div>))}</div>
       </div>
@@ -919,8 +1041,8 @@ function CargoRegister({ data, setData, toast, can }) {
   return (
     <div>
       {confirmDelete&&<ConfirmModal message="Delete this cargo record? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
-      <div className="section-header"><div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:200}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
+      <div className="section-header"><div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div><div className="section-actions"><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div className="actions-cell"><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span className="btn-label">Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span className="btn-label">Del</span></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div><div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className="form-input" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div><div className="form-group"><label className="form-label">Qty</label><input type="number" className="form-input" value={form.qty} onChange={e=>set("qty",e.target.value)}/></div><div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div><div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className="form-input" value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div><div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className="form-input" value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (SSP)</label><input type="number" className="form-input" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div></div></div>)}
     </div>
   );
@@ -975,8 +1097,8 @@ function Ticketing({ data, setData, toast, can }) {
   return (
     <div>
       {confirmDelete&&<ConfirmModal message="Delete this ticket? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
-      <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · $ {fmt(totalFees)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:getNextTicket()});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (USD)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>$ {fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)} title="Print"><Icon name="print" size={13}/><span style={{marginLeft:2}}>Print</span></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>$ {fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · $ {fmt(totalFees)}</div></div><div className="section-actions"><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:getNextTicket()});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (USD)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>$ {fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div className="actions-cell"><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)} title="Print"><Icon name="print" size={13}/><span className="btn-label">Print</span></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span className="btn-label">Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span className="btn-label">Del</span></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>$ {fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid">{[{k:"ticketNo",l:"Ticket No.",t:"number"},{k:"date",l:"Date",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (USD $)",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}<div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div></div></div>)}
     </div>
   );
@@ -1026,8 +1148,8 @@ function Bookings({ data, setData, toast, can }) {
   return (
     <div>
       {confirmDelete&&<ConfirmModal message="Delete this booking? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
-      <div className="section-header"><div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · $ {fmt(totalRev)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total ($)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">$ {fmt(r.fare)}</td><td className="mono">$ {fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>$ {fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>$ {fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      <div className="section-header"><div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · $ {fmt(totalRev)}</div></div><div className="section-actions"><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:34}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total ($)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">$ {fmt(r.fare)}</td><td className="mono">$ {fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>$ {fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div className="actions-cell"><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span className="btn-label">Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span className="btn-label">Del</span></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>$ {fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Fare ($)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div><div className="form-group"><label className="form-label">Taxes ($)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div><div className="form-group"><label className="form-label">Total ($)</label><input type="number" className="form-input" value={form.total||0} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
     </div>
   );
@@ -1044,9 +1166,9 @@ function Invoice({ cargo, tickets, bookings, toast }) {
   const handlePrint=()=>{if(preview)printInNewWindow(buildInvoiceHTML(preview));};
   return (
     <div>
-      <div className="section-header"><div className="section-title">Invoice Generator</div></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1.6fr",gap:16,alignItems:"start"}}>
-        <div className="card"><div style={{fontWeight:700,marginBottom:16,fontSize:14}}>Generate Invoice</div><div className="form-grid" style={{gridTemplateColumns:"1fr 1fr"}}><div className="form-group"><label className="form-label">Invoice No.</label><input className="form-input" value={form.invNo} onChange={e=>set("invNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className="form-input" value={form.invDate} onChange={e=>set("invDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={form.dueDate} onChange={e=>set("dueDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className="form-input" value={form.taxPct} onChange={e=>set("taxPct",e.target.value)}/></div><div className="form-group"><label className="form-label">Record Type</label><select className="form-select" value={form.type} onChange={e=>{set("type",e.target.value);set("refId","");}}><option value="cargo">Cargo</option><option value="tickets">Ticket</option><option value="bookings">Booking</option></select></div><div className="form-group"><label className="form-label">Select Record</label><select className="form-select" value={form.refId} onChange={e=>set("refId",e.target.value)}><option value="">— Choose —</option>{refs[form.type].map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div></div><div style={{marginTop:16}}><button className="btn btn-primary" onClick={generate} style={{width:"100%"}}><Icon name="invoice" size={15}/>Generate Invoice</button></div></div>
+      <div className="section-header"><div><div className="section-title">Invoice Generator</div><div style={{fontSize:12,color:"var(--muted)"}}>Generate &amp; print invoices from any record</div></div></div>
+      <div className="invoice-grid">
+        <div className="card"><div style={{fontWeight:700,marginBottom:16,fontSize:14}}>Generate Invoice</div><div className="form-grid"><div className="form-group"><label className="form-label">Invoice No.</label><input className="form-input" value={form.invNo} onChange={e=>set("invNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Invoice Date</label><input type="date" className="form-input" value={form.invDate} onChange={e=>set("invDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Due Date</label><input type="date" className="form-input" value={form.dueDate} onChange={e=>set("dueDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Tax (%)</label><input type="number" className="form-input" value={form.taxPct} onChange={e=>set("taxPct",e.target.value)}/></div><div className="form-group"><label className="form-label">Record Type</label><select className="form-select" value={form.type} onChange={e=>{set("type",e.target.value);set("refId","");}}><option value="cargo">Cargo</option><option value="tickets">Ticket</option><option value="bookings">Booking</option></select></div><div className="form-group"><label className="form-label">Select Record</label><select className="form-select" value={form.refId} onChange={e=>set("refId",e.target.value)}><option value="">— Choose —</option>{refs[form.type].map(r=><option key={r.id} value={r.id}>{r.label}</option>)}</select></div></div><div style={{marginTop:16}}><button className="btn btn-primary" onClick={generate} style={{width:"100%"}}><Icon name="invoice" size={15}/>Generate Invoice</button></div></div>
         {preview?(<div style={{overflowY:"auto"}}><div className="invoice-paper"><div className="inv-header"><div><div className="inv-company-name">PERWAANI</div><div style={{fontWeight:700,fontSize:13,color:"#333"}}>General Trading &amp; Investment Co. Ltd</div><div className="inv-address">Juba Airport Road, South Sudan<br/>perwaani2023@gmail.com · +211 (0) 920 000 149</div></div><div style={{textAlign:"right"}}><div style={{fontSize:11,fontWeight:700,color:"#888",textTransform:"uppercase"}}>Invoice</div><div className="inv-no">{preview.invNo}</div><div className="inv-label">Date</div><div className="inv-val">{preview.invDate}</div>{preview.dueDate&&<><div className="inv-label">Due</div><div className="inv-val">{preview.dueDate}</div></>}</div></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20,marginBottom:20,paddingBottom:16,borderBottom:"1px solid #eee"}}><div><div className="inv-label">Bill To</div><div style={{fontSize:15,fontWeight:700,marginTop:4,color:"#111"}}>{preview.bill.name}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.phone}</div><div style={{fontSize:12,color:"#555"}}>{preview.bill.route}</div></div><div><div className="inv-label">Payment Details</div><div style={{fontSize:12,marginTop:4,color:"#333"}}><span style={{color:"#888"}}>Method: </span>Cash / Mobile Money</div><div style={{fontSize:12,color:"#333"}}><span style={{color:"#888"}}>Ref: </span>{preview.invNo}</div></div></div><table className="inv-table"><thead><tr><th>#</th><th>Description</th><th>Date</th><th>Wt/kg</th><th>Unit Price ({preview.currency})</th><th>Qty</th><th style={{textAlign:"right"}}>Amount ({preview.currency})</th></tr></thead><tbody>{preview.lines.map((l,i)=>(<tr key={i}><td>{i+1}</td><td>{l.desc||"—"}</td><td>{l.date||"—"}</td><td>{l.wt||"—"}</td><td>{preview.currency} {fmt(l.unitPrice)}</td><td>{l.qty||1}</td><td style={{textAlign:"right",fontWeight:600}}>{preview.currency} {fmt(l.amount)}</td></tr>))}</tbody><tfoot><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Subtotal</td><td style={{textAlign:"right"}}>{preview.currency} {fmt(preview.subtotal)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",color:"#555"}}>Tax ({preview.taxPct}%)</td><td style={{textAlign:"right"}}>{preview.currency} {fmt(preview.tax)}</td></tr><tr><td colSpan={6} style={{textAlign:"right",fontWeight:700}}>GRAND TOTAL ({preview.currency})</td><td style={{textAlign:"right",fontWeight:800,color:"#c48b00"}}>{preview.currency} {fmt(preview.grand)}</td></tr></tfoot></table><div className="inv-footer">Thank you for choosing Perwaani General Trading &amp; Investment Co. Ltd.<br/>This invoice is official proof of payment. Payment due within 30 days.</div></div><div style={{display:"flex",justifyContent:"center",marginTop:12}}><button className="btn btn-primary" onClick={handlePrint}><Icon name="print" size={15}/>Print Invoice</button></div></div>):(<div className="card" style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:300}}><div className="empty"><Icon name="invoice" size={40}/><h3>No invoice yet</h3><p>Select a record and click Generate Invoice.</p></div></div>)}
       </div>
     </div>
@@ -1069,7 +1191,7 @@ function Reports({ cargo, tickets, bookings }) {
   ];
   return (
     <div>
-      <div className="section-header"><div><div className="section-title">Monthly Operations Report</div><div style={{fontSize:12,color:"var(--muted)"}}>Generated {new Date().toLocaleDateString()}</div></div><button className="btn btn-secondary" onClick={()=>window.print()}><Icon name="print" size={15}/>Print</button></div>
+      <div className="section-header"><div><div className="section-title">Monthly Operations Report</div><div style={{fontSize:12,color:"var(--muted)"}}>Generated {new Date().toLocaleDateString()}</div></div><div className="section-actions"><button className="btn btn-secondary" onClick={()=>window.print()}><Icon name="print" size={15}/>Print</button></div></div>
       <div className="card" style={{marginBottom:16}}><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody>
         <tr><td style={{fontWeight:600}}>Revenue</td><td className="mono">{fmt(cR)}</td><td className="mono">{fmt(tR)}</td><td className="mono">{fmt(bR)}</td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(total)}</td><td className="mono">{fmt(target)}</td><td className="mono" style={{color:total>=target?"var(--green)":"var(--red)"}}>{fmt(total-target)}</td><td className="mono">{((total/target)*100).toFixed(1)}%</td><td><StatusBadge status={total>=target?"Confirmed":"Pending"}/></td></tr>
         {/* FIX BUG-11: use TRANSACTION_TARGET everywhere */}
@@ -1083,9 +1205,9 @@ function Reports({ cargo, tickets, bookings }) {
 export default function App() {
   const [session, setSession] = useState(()=>getSession());
   const [page,setPage]        = useState("dashboard");
-  // FIX BUG-01 + BUG-12: separate mobile-open state from desktop-expanded state
-  const [sideExpanded, setSideExpanded] = useState(true);   // desktop: wide vs icon-only
-  const [mobileSideOpen, setMobileSideOpen] = useState(false); // mobile: show vs hide
+  const isMobile              = useIsMobile(768); // RESPONSIVE FIX: reactive, not raw window.innerWidth
+  const [sideExpanded, setSideExpanded]   = useState(true);
+  const [mobileSideOpen, setMobileSideOpen] = useState(false);
   const [cargo,setCargo]      = useState([]);
   const [tickets,setTickets]  = useState([]);
   const [bookings,setBookings]= useState([]);
@@ -1127,19 +1249,17 @@ export default function App() {
 
   // FIX BUG-01: toggle handler is now context-aware
   const handleMenuToggle = () => {
-    if (window.innerWidth <= 768) {
+    if (isMobile) {
       setMobileSideOpen(p => !p);
     } else {
       setSideExpanded(p => !p);
     }
   };
 
-  // Close mobile sidebar when resizing to desktop
+  // Close mobile drawer when viewport grows past breakpoint
   useEffect(() => {
-    const onResize = () => { if (window.innerWidth > 768) setMobileSideOpen(false); };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
+    if (!isMobile) setMobileSideOpen(false);
+  }, [isMobile]);
 
   useEffect(()=>{
     if (!session) return;
@@ -1168,24 +1288,22 @@ export default function App() {
   ];
   const titles={dashboard:"Operations Dashboard",cargo:"Cargo Register",ticketing:"Ticketing",bookings:"Bookings",invoice:"Invoice",reports:"Monthly Reports",users:"User Management"};
 
-  // FIX BUG-01 + BUG-12: compute sidebar class correctly for both mobile and desktop
+  // RESPONSIVE FIX: uses reactive isMobile, not raw window.innerWidth
   const sidebarClass = [
     "sidebar",
-    window.innerWidth <= 768
+    isMobile
       ? (mobileSideOpen ? "expanded" : "")
       : (sideExpanded   ? "expanded" : "collapsed"),
   ].filter(Boolean).join(" ");
 
-  const showLabels = window.innerWidth <= 768 ? mobileSideOpen : sideExpanded;
+  const showLabels = isMobile ? mobileSideOpen : sideExpanded;
 
   return (
     <>
       <style>{CSS}</style>
       <div className="app">
         {/* FIX BUG-01: overlay only rendered/visible on mobile when sidebar is open */}
-        {mobileSideOpen && (
-          <div className="sidebar-overlay visible" onClick={()=>setMobileSideOpen(false)} style={{display:"block"}}/>
-        )}
+        <div className={`sidebar-overlay${mobileSideOpen?" visible":""}`} onClick={()=>setMobileSideOpen(false)}/>
         <div className={sidebarClass}>
           <div className="sidebar-logo">
             <div className="logo-icon">PW</div>
@@ -1195,7 +1313,8 @@ export default function App() {
             {showLabels&&<div className="nav-section">Main Menu</div>}
             {allNav.map(n=>(
               <div key={n.id} className={`nav-item ${page===n.id?"active":""}`}
-                onClick={()=>{setPage(n.id);if(window.innerWidth<=768)setMobileSideOpen(false);}}>
+                data-label={n.label}
+                onClick={()=>{setPage(n.id);if(isMobile)setMobileSideOpen(false);}}>
                 <span className="icon"><Icon name={n.icon} size={18}/></span>
                 {showLabels&&<span>{n.label}</span>}
               </div>
@@ -1230,7 +1349,7 @@ export default function App() {
             <div className="topbar-right">
               <span className={`badge ${roleColor}`} style={{display:"flex",alignItems:"center",gap:4}}><Icon name="shield" size={11}/>{session.role}</span>
               <span className={`badge ${dbError?"badge-red":"badge-green"}`}><Icon name={dbError?"alert":"db"} size={12}/>{dbError?"DB Error":"Live"}</span>
-              <span style={{fontSize:12,color:"var(--muted)"}}>{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span>
+              <span className="topbar-date">{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span>
             </div>
           </div>
 
