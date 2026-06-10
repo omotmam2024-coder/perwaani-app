@@ -22,7 +22,9 @@ const sb = {
       }[table] || [];
       if (cols.length) url += `&or=(${cols.map(c=>`${c}=ilike.*${encodeURIComponent(search)}*`).join(",")})`;
     }
-    const token = getSession()?.token || SUPABASE_KEY;
+    // FIX BUG-10: don't fall back to anon key — force re-auth if token is missing
+    const token = getSession()?.token;
+    if (!token) { clearSession(); window.location.reload(); return []; }
     const res = await fetch(url, { headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` } });
     if (!res.ok) {
       const errText = await res.text();
@@ -76,13 +78,15 @@ const auth = {
   },
 };
 
-// Get stored session
 function getSession() {
   try { return JSON.parse(localStorage.getItem("pw_session") || "null"); } catch { return null; }
 }
 function saveSession(s) { localStorage.setItem("pw_session", JSON.stringify(s)); }
 function clearSession() { localStorage.removeItem("pw_session"); }
 
+// FIX BUG-05: refreshSession no longer calls window.location.reload().
+// It saves the new session and dispatches a custom event so App can
+// update React state without a full page reload (preserving form state).
 async function refreshSession() {
   const s = getSession();
   if (!s?.refreshToken) { clearSession(); window.location.reload(); return; }
@@ -95,8 +99,10 @@ async function refreshSession() {
     if (!res.ok) { clearSession(); window.location.reload(); return; }
     const data = await res.json();
     const expiresAt = Date.now() + ((data.expires_in || 3600) * 1000);
-    saveSession({ ...s, token: data.access_token, refreshToken: data.refresh_token, expiresAt });
-    window.location.reload();
+    const newSession = { ...s, token: data.access_token, refreshToken: data.refresh_token, expiresAt };
+    saveSession(newSession);
+    // Notify React without a page reload
+    window.dispatchEvent(new CustomEvent("pw-session-refreshed", { detail: newSession }));
   } catch { clearSession(); window.location.reload(); }
 }
 
@@ -114,6 +120,7 @@ const toDB = {
 
 const fmt   = n => Number(n||0).toLocaleString("en-US");
 const today = () => new Date().toISOString().slice(0,10);
+// FIX BUG-04: uid() is now the canonical ID generator for all records
 const uid   = p  => `${p}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
 function useDebounce(value, delay=350) {
@@ -172,16 +179,42 @@ function buildTicketHTML(t) {
   return `<div class="ticket-paper"><div class="tkt-header"><div><div class="tkt-company">PERWAANI</div><div class="tkt-sub">General Trading &amp; Investment Co. Ltd &middot; Juba Airport Road, South Sudan</div></div><div style="text-align:right"><div style="font-size:11px;opacity:0.8">BOARDING PASS</div><div class="tkt-no">#${t.ticketNo}</div></div></div><div class="tkt-route"><div><div class="tkt-airport">${t.from||"—"}</div><div class="tkt-city">Origin</div></div><div class="tkt-arrow">&#9992; &#8212;&#8212;&#8212;&#8212;&#8212;</div><div><div class="tkt-airport">${t.to||"—"}</div><div class="tkt-city">Destination</div></div></div><div class="tkt-body"><div class="tkt-row"><div class="tkt-cell"><div class="tkt-cell-label">Passenger</div><div class="tkt-cell-val">${t.passengerName||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Phone</div><div class="tkt-cell-val">${t.phone||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Date</div><div class="tkt-cell-val">${t.date||"—"}</div></div></div><div class="tkt-row"><div class="tkt-cell"><div class="tkt-cell-label">Flight</div><div class="tkt-cell-val">${t.flightNo||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Departure</div><div class="tkt-cell-val">${t.departureTime||"—"}</div></div><div class="tkt-cell"><div class="tkt-cell-label">Arrival</div><div class="tkt-cell-val">${t.arrivalTime||"—"}</div></div></div></div><div class="tkt-amount"><div><div class="tkt-amount-label">SERVICE FEE</div></div><div class="tkt-amount-val">$ ${fmt(t.fees)}</div></div><div class="tkt-footer">Perwaani General Trading &amp; Investment Co. Ltd &middot; +211 (0) 920 000 149 &middot; perwaani2023@gmail.com</div></div>`;
 }
 
+/* ══════════════════════════════════════════════
+   DELETE CONFIRM MODAL  (replaces window.confirm)
+   FIX SEC-04: Safe, consistent confirmation dialog
+══════════════════════════════════════════════ */
+function ConfirmModal({ message, onConfirm, onCancel }) {
+  return (
+    <div className="overlay" onClick={e => e.target === e.currentTarget && onCancel()}>
+      <div className="modal" style={{ maxWidth: 400 }}>
+        <div className="modal-header">
+          <div className="modal-title" style={{ color: "var(--red)" }}>
+            <Icon name="alert" size={18} /> Confirm Delete
+          </div>
+        </div>
+        <div className="modal-body">
+          <p style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.6 }}>{message}</p>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
+          <button className="btn btn-danger" onClick={onConfirm}>
+            <Icon name="trash" size={14} /> Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ══════════════════════════════════════════════
    LOGIN SCREEN
 ══════════════════════════════════════════════ */
 function LoginScreen({ onLogin }) {
-  const [email, setEmail]     = useState("");
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
-  const [showPw, setShowPw]   = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
+  const [showPw, setShowPw]     = useState(false);
 
   const submit = async (e) => {
     e && e.preventDefault();
@@ -189,7 +222,6 @@ function LoginScreen({ onLogin }) {
     setLoading(true); setError("");
     try {
       const session = await auth.signIn(email.trim(), password);
-      // Fetch role — try with user token first, fallback to anon key
       let role = "viewer", fullName = session.user.email;
       try {
         const res = await fetch(
@@ -226,7 +258,8 @@ function LoginScreen({ onLogin }) {
           {error && <div className="auth-error">{error}</div>}
           <div className="auth-field">
             <label className="auth-label">Email Address</label>
-            <input className="auth-input" type="email" placeholder="you@example.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
+            {/* autoFocus for better UX on desktop */}
+            <input className="auth-input" type="email" placeholder="you@example.com" value={email} autoFocus onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()}/>
           </div>
           <div className="auth-field">
             <label className="auth-label">Password</label>
@@ -252,12 +285,14 @@ function LoginScreen({ onLogin }) {
    USER MANAGEMENT  (Admin only)
 ══════════════════════════════════════════════ */
 function UserManagement({ session, toast }) {
-  const [users, setUsers]     = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [users, setUsers]       = useState([]);
+  const [loading, setLoading]   = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving]   = useState(false);
-  const [form, setForm]       = useState({ email:"", full_name:"", password:"", role:"staff" });
-  const [errors, setErrors]   = useState({});
+  const [saving, setSaving]     = useState(false);
+  const [form, setForm]         = useState({ email:"", full_name:"", password:"", role:"staff" });
+  const [errors, setErrors]     = useState({});
+  // FIX SEC-04: confirmDelete holds { id, email } when a delete is pending
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const loadUsers = useCallback(async () => {
@@ -269,8 +304,7 @@ function UserManagement({ session, toast }) {
       setUsers(await res.json());
     } catch(e) { toast("Failed to load users","error"); }
     setLoading(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[session.token]);
+  }, [session.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(()=>{ loadUsers(); },[loadUsers]);
 
@@ -286,7 +320,6 @@ function UserManagement({ session, toast }) {
     if (!validate()) return;
     setSaving(true);
     try {
-      // 1. Sign up the new user using Supabase Auth signUp (works with anon key)
       const signUpRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: "POST",
         headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY },
@@ -297,7 +330,6 @@ function UserManagement({ session, toast }) {
       const newAuthId = signUpData.user?.id || signUpData.id;
       if (!newAuthId) throw new Error("No user ID returned — user may already exist");
 
-      // 2. Insert into app_users with role using admin session token
       const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
         method: "POST",
         headers: {
@@ -332,14 +364,21 @@ function UserManagement({ session, toast }) {
     } catch(e) { toast("Failed: "+e.message,"error"); }
   };
 
+  // FIX SEC-04: no more window.confirm() — use ConfirmModal instead
   const deleteUser = async (u) => {
     if (u.auth_id === session.userId) { toast("Cannot delete yourself","error"); return; }
-    if (!window.confirm(`Delete user ${u.email}?`)) return;
+    setConfirmDelete(u);
+  };
+
+  const confirmDeleteUser = async () => {
+    const u = confirmDelete;
+    setConfirmDelete(null);
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${u.id}`, {
         method: "DELETE", headers: {"apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`},
       });
-      toast("User deleted","error");
+      // FIX BUG-08: deletions are successful operations — use "success" not "error"
+      toast("User deleted","success");
       loadUsers();
     } catch(e) { toast("Failed: "+e.message,"error"); }
   };
@@ -349,6 +388,13 @@ function UserManagement({ session, toast }) {
 
   return (
     <div>
+      {confirmDelete && (
+        <ConfirmModal
+          message={`Are you sure you want to delete user "${confirmDelete.email}"? This action cannot be undone.`}
+          onConfirm={confirmDeleteUser}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
       <div className="section-header">
         <div><div className="section-title">User Management</div><div style={{fontSize:12,color:"var(--muted)"}}>{users.length} users · Admin only</div></div>
         <button className="btn btn-primary" onClick={()=>setShowForm(true)}><Icon name="plus" size={15}/>Add User</button>
@@ -445,6 +491,7 @@ const Icon = ({ name, size=20 }) => {
 
 /* ══════════════════════════════════════════════
    CSS
+   FIX BUG-12: Sidebar class naming — "expanded" for desktop, "open" for mobile
 ══════════════════════════════════════════════ */
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -452,8 +499,13 @@ const CSS = `
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text)}
   .app{display:flex;min-height:100vh}
+
+  /* ── SIDEBAR ── */
   .sidebar{width:240px;min-width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;transition:width 0.3s ease}
+  /* FIX BUG-12: explicit desktop expanded/collapsed classes */
+  .sidebar.expanded{width:240px;min-width:240px}
   .sidebar.collapsed{width:64px;min-width:64px}
+
   .sidebar-logo{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
   .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#000;flex-shrink:0}
   .logo-title{font-weight:700;font-size:13px;color:var(--accent)}.logo-sub{font-size:10px;color:var(--muted)}
@@ -465,6 +517,7 @@ const CSS = `
   .nav-item .icon{flex-shrink:0}
   .sidebar-footer{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)}
   .sidebar-footer a{color:var(--blue);text-decoration:none}
+
   .main{flex:1;display:flex;flex-direction:column;min-width:0}
   .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
   .topbar-left{display:flex;align-items:center;gap:12px;flex-shrink:0}
@@ -527,7 +580,7 @@ const CSS = `
   .modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.6);animation:popIn 0.2s ease}
   @keyframes popIn{from{opacity:0;transform:scale(0.95) translateY(10px)}to{opacity:1;transform:none}}
   .modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-  .modal-title{font-size:16px;font-weight:700}
+  .modal-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
   .modal-body{padding:24px}
   .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px}
   .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
@@ -540,15 +593,19 @@ const CSS = `
   .bar-chart{display:flex;align-items:flex-end;gap:8px;height:100px;padding:8px 0}
   .bar{flex:1;border-radius:4px 4px 0 0;transition:all 0.3s;min-width:20px}
   .bar-label{text-align:center;font-size:10px;color:var(--muted);margin-top:4px}
-  /* ── MOBILE OVERLAY (backdrop behind open sidebar) ── */
+
+  /* ── MOBILE SIDEBAR OVERLAY ──
+     FIX BUG-01: overlay is hidden by default; JS sets display:block only on mobile */
   .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:49;backdrop-filter:blur(2px)}
+
   /* ── TABLET ── */
   @media(max-width:900px){.topbar-center{max-width:280px}}
+
   /* ── MOBILE ── */
   @media(max-width:768px){
+    /* FIX BUG-12: on mobile sidebar uses transform, not width */
     .sidebar{position:fixed;z-index:50;height:100vh;transform:translateX(-100%);transition:transform 0.28s ease;width:240px!important;min-width:240px!important}
-    .sidebar.open{transform:translateX(0)}
-    .sidebar-overlay.visible{display:block}
+    .sidebar.expanded{transform:translateX(0)}
     .main{width:100%}
     .topbar{flex-wrap:wrap;padding:10px 14px;gap:8px}
     .topbar-left{flex:1;min-width:0}
@@ -661,7 +718,7 @@ function GlobalSearch({ onNavigate }) {
       .then(([c,t,b])=>{setResults({cargo:c.slice(0,5),tickets:t.slice(0,5),bookings:b.slice(0,5)});setOpen(true);})
       .finally(()=>setLoading(false));
   },[dq]);
-  useEffect(()=>{const h=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);// eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{const h=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
   const total=results?results.cargo.length+results.tickets.length+results.bookings.length:0;
   const go=page=>{onNavigate(page);setQuery("");setResults(null);setOpen(false);};
   return (
@@ -714,19 +771,50 @@ function Dashboard({ cargo, tickets, bookings }) {
 
 function CargoRegister({ data, setData, toast, can }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
+  // FIX SEC-04: confirmation modal state
+  const [confirmDelete,setConfirmDelete]=useState(null);
   const emptyForm={receivingDate:today(),description:"",unitKg:"",unitPrice:"",qty:"",spec:"",senderName:"",senderLocation:"",senderContact:"",receiverName:"",receiverLocation:"",receiverContact:"",paymentMethod:"Cash",amount:""};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>{const nf={...f,[k]:v};if(k==="unitPrice"||k==="qty"){const p=parseFloat(k==="unitPrice"?v:nf.unitPrice)||0,q=parseFloat(k==="qty"?v:nf.qty)||0;nf.amount=p*q||"";}return nf;});
   const validate=()=>{const e={};if(!form.senderName.trim())e.senderName="Required";if(!form.receiverName.trim())e.receiverName="Required";if(!form.description)e.description="Required";setErrors(e);return Object.keys(e).length===0;};
-  const submit=async()=>{if(!validate()){toast("Please fix form errors","error");return;}setSaving(true);try{if(editing){await sb.update("cargo",editing,toDB.cargo({...form,id:editing}));setData(d=>d.map(r=>r.id===editing?{...form,id:editing}:r));toast("Updated ✓","success");}else{const id=`CRG-${String(data.length+1).padStart(3,"0")}`,row={...form,id};await sb.insert("cargo",toDB.cargo(row));setData(d=>[row,...d]);toast("Saved ✓","success");}setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});}catch(e){toast("Error: "+e.message,"error");}setSaving(false);};
-  const del=async id=>{try{await sb.remove("cargo",id);setData(d=>d.filter(r=>r.id!==id));toast("Deleted","error");}catch(e){toast("Delete failed: "+e.message,"error");}};
+  const submit=async()=>{
+    if(!validate()){toast("Please fix form errors","error");return;}
+    setSaving(true);
+    try{
+      if(editing){
+        await sb.update("cargo",editing,toDB.cargo({...form,id:editing}));
+        setData(d=>d.map(r=>r.id===editing?{...form,id:editing}:r));
+        toast("Updated ✓","success");
+      } else {
+        // FIX BUG-04: use uid() instead of data.length-based ID to prevent collisions
+        const id = uid("CRG");
+        const row={...form,id};
+        await sb.insert("cargo",toDB.cargo(row));
+        setData(d=>[row,...d]);
+        toast("Saved ✓","success");
+      }
+      setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});
+    }catch(e){toast("Error: "+e.message,"error");}
+    setSaving(false);
+  };
+  // FIX SEC-04 + BUG-08: use confirm modal, toast success not error
+  const del=async()=>{
+    const id=confirmDelete;
+    setConfirmDelete(null);
+    try{
+      await sb.remove("cargo",id);
+      setData(d=>d.filter(r=>r.id!==id));
+      toast("Record deleted","success"); // FIX BUG-08
+    }catch(e){toast("Delete failed: "+e.message,"error");}
+  };
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);};
   const filtered=data.filter(r=>[(r.senderName||""),(r.receiverName||""),(r.id||""),(r.description||"")].some(v=>v.toLowerCase().includes(search.toLowerCase())));
   const total=data.reduce((s,r)=>s+Number(r.amount||0),0);
   return (
     <div>
+      {confirmDelete&&<ConfirmModal message="Delete this cargo record? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
       <div className="section-header"><div><div className="section-title">Customer Receiving Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} entries · SSP {fmt(total)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:200}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Entry</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="cargo" size={40}/><h3>No cargo entries yet</h3><p>Click "New Entry" to begin.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>S/N</th><th>Date</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Sender</th><th>Receiver</th><th>Payment</th><th>Amount (SSP)</th><th>Actions</th></tr></thead><tbody>{filtered.map((r,i)=>(<tr key={r.id}><td className="mono" style={{color:"var(--muted)"}}>{i+1}</td><td style={{fontSize:12}}>{r.receivingDate||"—"}</td><td><span className="tag">{r.description||"—"}</span></td><td className="mono">{r.qty||"—"}</td><td className="mono">{fmt(r.unitPrice)}</td><td><div style={{fontWeight:600,fontSize:13}}>{r.senderName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.senderLocation||""}</div></td><td><div style={{fontWeight:600,fontSize:13}}>{r.receiverName||"—"}</div><div style={{fontSize:11,color:"var(--muted)"}}>{r.receiverLocation||""}</div></td><td><PayPill method={r.paymentMethod}/></td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(r.amount)}</td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(240,165,0,0.04)"}}><td colSpan={8} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--accent)",fontWeight:800}}>{fmt(total)}</td><td/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Cargo Entry":"New Cargo Entry"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.receivingDate} onChange={e=>set("receivingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Description *</label><select className={`form-select${errors.description?" error":""}`} value={form.description} onChange={e=>set("description",e.target.value)}><option value="">Select…</option>{["Clothes","M-items","Starlink","P-solar","S-battery","Cooking Oil","Dry Split Ginger","Ciggarettes","Onion","Garlic","Soda","G-Paste","Chairs","Electronics","Food Items","Documents","Other"].map(o=><option key={o}>{o}</option>)}</select>{errors.description&&<span className="form-error">{errors.description}</span>}</div><div className="form-group"><label className="form-label">Unit / kg</label><input type="text" className="form-input" value={form.unitKg} onChange={e=>set("unitKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Unit Price (SSP)</label><input type="number" className="form-input" value={form.unitPrice} onChange={e=>set("unitPrice",e.target.value)}/></div><div className="form-group"><label className="form-label">Qty</label><input type="number" className="form-input" value={form.qty} onChange={e=>set("qty",e.target.value)}/></div><div className="form-group"><label className="form-label">Spec</label><input type="text" className="form-input" value={form.spec} onChange={e=>set("spec",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Name *</label><input type="text" className={`form-input${errors.senderName?" error":""}`} value={form.senderName} onChange={e=>set("senderName",e.target.value)}/>{errors.senderName&&<span className="form-error">{errors.senderName}</span>}</div><div className="form-group"><label className="form-label">Sender Location</label><input type="text" className="form-input" value={form.senderLocation} onChange={e=>set("senderLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Sender Contact</label><input type="tel" className="form-input" value={form.senderContact} onChange={e=>set("senderContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Name *</label><input type="text" className={`form-input${errors.receiverName?" error":""}`} value={form.receiverName} onChange={e=>set("receiverName",e.target.value)}/>{errors.receiverName&&<span className="form-error">{errors.receiverName}</span>}</div><div className="form-group"><label className="form-label">Receiver Location</label><input type="text" className="form-input" value={form.receiverLocation} onChange={e=>set("receiverLocation",e.target.value)}/></div><div className="form-group"><label className="form-label">Receiver Contact</label><input type="tel" className="form-input" value={form.receiverContact} onChange={e=>set("receiverContact",e.target.value)}/></div><div className="form-group"><label className="form-label">Payment Method</label><select className="form-select" value={form.paymentMethod} onChange={e=>set("paymentMethod",e.target.value)}>{["Cash","Mobile Money","Bank Transfer","Credit","Ethiopia Birr"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Amount (SSP)</label><input type="number" className="form-input" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Save"}</button></div></div></div>)}
     </div>
   );
@@ -734,21 +822,55 @@ function CargoRegister({ data, setData, toast, can }) {
 
 function Ticketing({ data, setData, toast, can }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
-  const nextTicket=117+data.length;
-  const emptyForm={ticketNo:nextTicket,date:today(),passengerName:"",phone:"",fees:"",weightKg:"",checkInTime:"",departureTime:"",arrivalTime:"",from:"",to:"",flightNo:"",paymentStatus:"Paid",remarks:""};
+  // FIX SEC-04: confirmation modal state
+  const [confirmDelete,setConfirmDelete]=useState(null);
+
+  // FIX BUG-02: use a function instead of a constant so it's always fresh
+  const getNextTicket = () => 117 + data.length;
+
+  const emptyForm={ticketNo:getNextTicket(),date:today(),passengerName:"",phone:"",fees:"",weightKg:"",checkInTime:"",departureTime:"",arrivalTime:"",from:"",to:"",flightNo:"",paymentStatus:"Paid",remarks:""};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const validate=()=>{const e={};if(!form.passengerName.trim())e.passengerName="Required";if(!form.from.trim())e.from="Required";if(!form.to.trim())e.to="Required";setErrors(e);return Object.keys(e).length===0;};
-  const submit=async()=>{if(!validate()){toast("Please fix errors","error");return;}setSaving(true);try{const id=editing||uid("TKT"),row={...form,id};if(editing){await sb.update("tickets",editing,toDB.tickets(row));setData(d=>d.map(r=>r.id===editing?row:r));toast("Updated ✓","success");}else{await sb.insert("tickets",toDB.tickets(row));setData(d=>[row,...d]);toast("Ticket saved ✓","success");}setShowForm(false);setEditing(null);setForm({...emptyForm,ticketNo:nextTicket+1});}catch(e){toast("Error: "+e.message,"error");}setSaving(false);};
-  const del=async id=>{try{await sb.remove("tickets",id);setData(d=>d.filter(r=>r.id!==id));toast("Deleted","error");}catch(e){toast("Delete failed: "+e.message,"error");}};
+  const submit=async()=>{
+    if(!validate()){toast("Please fix errors","error");return;}
+    setSaving(true);
+    try{
+      const id=editing||uid("TKT"),row={...form,id};
+      if(editing){
+        await sb.update("tickets",editing,toDB.tickets(row));
+        setData(d=>d.map(r=>r.id===editing?row:r));
+        toast("Updated ✓","success");
+      } else {
+        await sb.insert("tickets",toDB.tickets(row));
+        setData(d=>[row,...d]);
+        toast("Ticket saved ✓","success");
+      }
+      setShowForm(false);setEditing(null);
+      // FIX BUG-02: call getNextTicket() fresh after data update
+      setForm({...emptyForm,ticketNo:getNextTicket()+1});
+    }catch(e){toast("Error: "+e.message,"error");}
+    setSaving(false);
+  };
+  // FIX SEC-04 + BUG-08
+  const del=async()=>{
+    const id=confirmDelete;
+    setConfirmDelete(null);
+    try{
+      await sb.remove("tickets",id);
+      setData(d=>d.filter(r=>r.id!==id));
+      toast("Ticket deleted","success"); // FIX BUG-08
+    }catch(e){toast("Delete failed: "+e.message,"error");}
+  };
   const handlePrint=r=>printInNewWindow(buildTicketHTML(r));
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);setErrors({});};
   const filtered=data.filter(r=>(r.passengerName||"").toLowerCase().includes(search.toLowerCase())||(r.ticketNo+"").includes(search)||(r.from||"").toLowerCase().includes(search.toLowerCase())||(r.to||"").toLowerCase().includes(search.toLowerCase()));
   const totalFees=data.reduce((s,r)=>s+Number(r.fees||0),0);
   return (
     <div>
-      <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · $ {fmt(totalFees)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:nextTicket});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (USD)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>$ {fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)} title="Print"><Icon name="print" size={13}/><span style={{marginLeft:2}}>Print</span></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>$ {fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      {confirmDelete&&<ConfirmModal message="Delete this ticket? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
+      <div className="section-header"><div><div className="section-title">Travel Ticket Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} passengers · $ {fmt(totalFees)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm({...emptyForm,ticketNo:getNextTicket()});setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Ticket</button></div></div>
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="ticket" size={40}/><h3>No tickets yet</h3><p>Issue the first travel ticket.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Ticket No.</th><th>Date</th><th>Passenger</th><th>Route</th><th>Flight</th><th>Departure</th><th>Fees (USD)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{r.ticketNo}</td><td style={{fontSize:12}}>{r.date||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span style={{color:"var(--muted)"}}>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td className="mono" style={{fontSize:12}}>{r.flightNo||"—"}</td><td style={{fontSize:12}}>{r.departureTime||"—"}</td><td className="mono" style={{color:"var(--green)",fontWeight:700}}>$ {fmt(r.fees)}</td><td><StatusBadge status={r.paymentStatus}/></td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>handlePrint(r)} title="Print"><Icon name="print" size={13}/><span style={{marginLeft:2}}>Print</span></button><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(88,166,255,0.04)"}}><td colSpan={6} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--blue)",fontWeight:800}}>$ {fmt(totalFees)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
       {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Ticket":"Issue Ticket"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid">{[{k:"ticketNo",l:"Ticket No.",t:"number"},{k:"date",l:"Date",t:"date"},{k:"passengerName",l:"Passenger *",t:"text"},{k:"phone",l:"Phone",t:"tel"},{k:"fees",l:"Fees (USD $)",t:"number"},{k:"weightKg",l:"Weight kg",t:"number"},{k:"from",l:"From *",t:"text"},{k:"to",l:"To *",t:"text"},{k:"flightNo",l:"Flight No.",t:"text"},{k:"checkInTime",l:"Check-in",t:"time"},{k:"departureTime",l:"Departure",t:"time"},{k:"arrivalTime",l:"Arrival",t:"time"}].map(({k,l,t})=>(<div className="form-group" key={k}><label className="form-label">{l}</label><input type={t} className={`form-input${errors[k]?" error":""}`} value={form[k]||""} onChange={e=>set(k,e.target.value)}/>{errors[k]&&<span className="form-error">{errors[k]}</span>}</div>))}<div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.paymentStatus} onChange={e=>set("paymentStatus",e.target.value)}>{["Paid","Pending","Partial","Cancelled"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Remarks</label><input type="text" className="form-input" value={form.remarks||""} onChange={e=>set("remarks",e.target.value)}/></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Issue"}</button></div></div></div>)}
     </div>
   );
@@ -756,20 +878,51 @@ function Ticketing({ data, setData, toast, can }) {
 
 function Bookings({ data, setData, toast, can }) {
   const [showForm,setShowForm]=useState(false),[search,setSearch]=useState(""),[editing,setEditing]=useState(null),[saving,setSaving]=useState(false);
-  const emptyForm={bookingDate:today(),passengerName:"",phone:"",idPassport:"",from:"",to:"",flightNo:"",departureDate:"",departureTime:"",seatClass:"Economy",luggageKg:"",fare:"",taxes:"",status:"Booked"};
+  // FIX SEC-04: confirmation modal state
+  const [confirmDelete,setConfirmDelete]=useState(null);
+
+  // FIX BUG-03: total initialised to 0, not undefined
+  const emptyForm={bookingDate:today(),passengerName:"",phone:"",idPassport:"",from:"",to:"",flightNo:"",departureDate:"",departureTime:"",seatClass:"Economy",luggageKg:"",fare:"",taxes:"",total:0,status:"Booked"};
   const [form,setForm]=useState(emptyForm),[errors,setErrors]=useState({});
   const set=(k,v)=>setForm(f=>{const nf={...f,[k]:v};if(k==="fare"||k==="taxes")nf.total=(parseFloat(k==="fare"?v:nf.fare)||0)+(parseFloat(k==="taxes"?v:nf.taxes)||0);return nf;});
   const validate=()=>{const e={};if(!form.passengerName.trim())e.passengerName="Required";if(!form.from.trim())e.from="Required";if(!form.to.trim())e.to="Required";setErrors(e);return Object.keys(e).length===0;};
-  const submit=async()=>{if(!validate()){toast("Please fix errors","error");return;}setSaving(true);try{const id=editing||uid("B"),bkgId=editing?form.bookingId:`BKG-${String(data.length+1).padStart(4,"0")}`,total=(parseFloat(form.fare)||0)+(parseFloat(form.taxes)||0),row={...form,id,bookingId:bkgId,total};if(editing){await sb.update("bookings",editing,toDB.bookings(row));setData(d=>d.map(r=>r.id===editing?row:r));toast("Updated ✓","success");}else{await sb.insert("bookings",toDB.bookings(row));setData(d=>[row,...d]);toast("Booking confirmed ✓","success");}setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});}catch(e){toast("Error: "+e.message,"error");}setSaving(false);};
-  const del=async id=>{try{await sb.remove("bookings",id);setData(d=>d.filter(r=>r.id!==id));toast("Deleted","error");}catch(e){toast("Delete failed: "+e.message,"error");}};
+  const submit=async()=>{
+    if(!validate()){toast("Please fix errors","error");return;}
+    setSaving(true);
+    try{
+      const id=editing||uid("B"),bkgId=editing?form.bookingId:`BKG-${String(data.length+1).padStart(4,"0")}`,total=(parseFloat(form.fare)||0)+(parseFloat(form.taxes)||0),row={...form,id,bookingId:bkgId,total};
+      if(editing){
+        await sb.update("bookings",editing,toDB.bookings(row));
+        setData(d=>d.map(r=>r.id===editing?row:r));
+        toast("Updated ✓","success");
+      } else {
+        await sb.insert("bookings",toDB.bookings(row));
+        setData(d=>[row,...d]);
+        toast("Booking confirmed ✓","success");
+      }
+      setShowForm(false);setEditing(null);setForm(emptyForm);setErrors({});
+    }catch(e){toast("Error: "+e.message,"error");}
+    setSaving(false);
+  };
+  // FIX SEC-04 + BUG-08
+  const del=async()=>{
+    const id=confirmDelete;
+    setConfirmDelete(null);
+    try{
+      await sb.remove("bookings",id);
+      setData(d=>d.filter(r=>r.id!==id));
+      toast("Booking deleted","success"); // FIX BUG-08
+    }catch(e){toast("Delete failed: "+e.message,"error");}
+  };
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);setErrors({});};
   const filtered=data.filter(r=>(r.passengerName||"").toLowerCase().includes(search.toLowerCase())||(r.bookingId||"").includes(search)||(r.from||"").toLowerCase().includes(search.toLowerCase())||(r.to||"").toLowerCase().includes(search.toLowerCase()));
   const totalRev=data.reduce((s,r)=>s+Number(r.total||0),0);
   return (
     <div>
+      {confirmDelete&&<ConfirmModal message="Delete this booking? This cannot be undone." onConfirm={del} onCancel={()=>setConfirmDelete(null)}/>}
       <div className="section-header"><div><div className="section-title">Flight Booking Register</div><div style={{fontSize:12,color:"var(--muted)"}}>{data.length} bookings · $ {fmt(totalRev)}</div></div><div style={{display:"flex",gap:8}}><div className="search-wrap"><span className="search-icon"><Icon name="search" size={15}/></span><input className="form-input" placeholder="Search…" value={search} onChange={e=>setSearch(e.target.value)} style={{paddingLeft:36,width:180}}/></div><button className="btn btn-primary" onClick={()=>{setForm(emptyForm);setEditing(null);setShowForm(true);}}><Icon name="plus" size={15}/>New Booking</button></div></div>
-      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total ($)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">$ {fmt(r.fare)}</td><td className="mono">$ {fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>$ {fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>del(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>$ {fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
-      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Fare ($)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div><div className="form-group"><label className="form-label">Taxes ($)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div><div className="form-group"><label className="form-label">Total ($)</label><input type="number" className="form-input" value={form.total||""} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
+      {filtered.length===0?<div className="card"><div className="empty"><Icon name="booking" size={40}/><h3>No bookings yet</h3><p>Create the first flight booking.</p></div></div>:(<div className="card"><div className="table-wrap"><table><thead><tr><th>Booking ID</th><th>Date</th><th>Passenger</th><th>Route</th><th>Class</th><th>Fare</th><th>Taxes</th><th>Total ($)</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map(r=>(<tr key={r.id}><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>{r.bookingId||"—"}</td><td style={{fontSize:12}}>{r.bookingDate||"—"}</td><td style={{fontWeight:600}}>{r.passengerName||"—"}</td><td><div style={{display:"flex",alignItems:"center",gap:4,fontSize:12}}><span style={{color:"var(--blue)"}}>{r.from||"—"}</span><span>→</span><span style={{color:"var(--purple)"}}>{r.to||"—"}</span></div></td><td><span className="badge badge-blue">{r.seatClass||"—"}</span></td><td className="mono">$ {fmt(r.fare)}</td><td className="mono">$ {fmt(r.taxes)}</td><td className="mono" style={{color:"var(--purple)",fontWeight:700}}>$ {fmt(r.total)}</td><td><StatusBadge status={r.status}/></td><td><div style={{display:"flex",gap:4,flexWrap:"wrap"}}><button className="btn btn-ghost btn-sm" onClick={()=>openEdit(r)} disabled={!can("edit")} title="Edit"><Icon name="edit" size={13}/><span style={{marginLeft:2}}>Edit</span></button><button className="btn btn-danger btn-sm" onClick={()=>setConfirmDelete(r.id)} disabled={!can("delete")} title="Delete"><Icon name="trash" size={13}/><span style={{marginLeft:2}}>Del</span></button></div></td></tr>))}<tr style={{background:"rgba(163,113,247,0.04)"}}><td colSpan={7} style={{fontWeight:700,textAlign:"right"}}>TOTAL</td><td className="mono" style={{color:"var(--purple)",fontWeight:800}}>$ {fmt(totalRev)}</td><td colSpan={2}/></tr></tbody></table></div></div>)}
+      {showForm&&(<div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}><div className="modal"><div className="modal-header"><div className="modal-title">{editing?"Edit Booking":"New Booking"}</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div><div className="modal-body"><div className="form-grid"><div className="form-group"><label className="form-label">Date</label><input type="date" className="form-input" value={form.bookingDate} onChange={e=>set("bookingDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Passenger *</label><input type="text" className={`form-input${errors.passengerName?" error":""}`} value={form.passengerName||""} onChange={e=>set("passengerName",e.target.value)}/>{errors.passengerName&&<span className="form-error">{errors.passengerName}</span>}</div><div className="form-group"><label className="form-label">Phone</label><input type="tel" className="form-input" value={form.phone||""} onChange={e=>set("phone",e.target.value)}/></div><div className="form-group"><label className="form-label">ID / Passport</label><input type="text" className="form-input" value={form.idPassport||""} onChange={e=>set("idPassport",e.target.value)}/></div><div className="form-group"><label className="form-label">From *</label><input type="text" className={`form-input${errors.from?" error":""}`} value={form.from||""} onChange={e=>set("from",e.target.value)}/>{errors.from&&<span className="form-error">{errors.from}</span>}</div><div className="form-group"><label className="form-label">To *</label><input type="text" className={`form-input${errors.to?" error":""}`} value={form.to||""} onChange={e=>set("to",e.target.value)}/>{errors.to&&<span className="form-error">{errors.to}</span>}</div><div className="form-group"><label className="form-label">Flight No.</label><input type="text" className="form-input" value={form.flightNo||""} onChange={e=>set("flightNo",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Date</label><input type="date" className="form-input" value={form.departureDate||""} onChange={e=>set("departureDate",e.target.value)}/></div><div className="form-group"><label className="form-label">Departure Time</label><input type="time" className="form-input" value={form.departureTime||""} onChange={e=>set("departureTime",e.target.value)}/></div><div className="form-group"><label className="form-label">Seat Class</label><select className="form-select" value={form.seatClass||"Economy"} onChange={e=>set("seatClass",e.target.value)}>{["Economy","Business","First Class"].map(o=><option key={o}>{o}</option>)}</select></div><div className="form-group"><label className="form-label">Luggage (kg)</label><input type="number" className="form-input" value={form.luggageKg||""} onChange={e=>set("luggageKg",e.target.value)}/></div><div className="form-group"><label className="form-label">Fare ($)</label><input type="number" className="form-input" value={form.fare||""} onChange={e=>set("fare",e.target.value)}/></div><div className="form-group"><label className="form-label">Taxes ($)</label><input type="number" className="form-input" value={form.taxes||""} onChange={e=>set("taxes",e.target.value)}/></div><div className="form-group"><label className="form-label">Total ($)</label><input type="number" className="form-input" value={form.total||0} readOnly style={{borderColor:"var(--green)"}}/></div><div className="form-group"><label className="form-label">Status</label><select className="form-select" value={form.status||"Booked"} onChange={e=>set("status",e.target.value)}>{["Booked","Confirmed","Cancelled","Pending"].map(o=><option key={o}>{o}</option>)}</select></div></div></div><div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={submit} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}{editing?"Update":"Confirm"}</button></div></div></div>)}
     </div>
   );
 }
@@ -795,13 +948,27 @@ function Invoice({ cargo, tickets, bookings, toast }) {
 }
 
 function Reports({ cargo, tickets, bookings }) {
+  // FIX BUG-11: single source of truth for transaction target
+  const TRANSACTION_TARGET = 50;
+
   const cR=cargo.reduce((s,r)=>s+Number(r.amount||0),0),tR=tickets.reduce((s,r)=>s+Number(r.fees||0),0),bR=bookings.reduce((s,r)=>s+Number(r.total||0),0);
   const total=cR+tR+bR,txns=cargo.length+tickets.length+bookings.length,target=20000000;
-  const kpis=[{name:"Cargo Revenue (SSP)",actual:cR,target:15000000,owner:"Operations"},{name:"Ticket Revenue ($)",actual:tR,target:5000000,owner:"Ticketing"},{name:"Booking Revenue ($)",actual:bR,target:3000000,owner:"Booking"},{name:"Total Transactions",actual:txns,target:80,owner:"All Depts"},{name:"Combined Revenue",actual:total,target,owner:"Finance"}];
+  const kpis=[
+    {name:"Cargo Revenue (SSP)",actual:cR,target:15000000,owner:"Operations"},
+    {name:"Ticket Revenue ($)",actual:tR,target:5000000,owner:"Ticketing"},
+    {name:"Booking Revenue ($)",actual:bR,target:3000000,owner:"Booking"},
+    // FIX BUG-11: use TRANSACTION_TARGET constant
+    {name:"Total Transactions",actual:txns,target:TRANSACTION_TARGET,owner:"All Depts"},
+    {name:"Combined Revenue",actual:total,target,owner:"Finance"},
+  ];
   return (
     <div>
       <div className="section-header"><div><div className="section-title">Monthly Operations Report</div><div style={{fontSize:12,color:"var(--muted)"}}>Generated {new Date().toLocaleDateString()}</div></div><button className="btn btn-secondary" onClick={()=>window.print()}><Icon name="print" size={15}/>Print</button></div>
-      <div className="card" style={{marginBottom:16}}><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody><tr><td style={{fontWeight:600}}>Revenue</td><td className="mono">{fmt(cR)}</td><td className="mono">{fmt(tR)}</td><td className="mono">{fmt(bR)}</td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(total)}</td><td className="mono">{fmt(target)}</td><td className="mono" style={{color:total>=target?"var(--green)":"var(--red)"}}>{fmt(total-target)}</td><td className="mono">{((total/target)*100).toFixed(1)}%</td><td><StatusBadge status={total>=target?"Confirmed":"Pending"}/></td></tr><tr><td style={{fontWeight:600}}>Transactions</td><td className="mono">{cargo.length}</td><td className="mono">{tickets.length}</td><td className="mono">{bookings.length}</td><td className="mono" style={{fontWeight:700}}>{txns}</td><td className="mono">50</td><td className="mono" style={{color:txns>=50?"var(--green)":"var(--red)"}}>{txns-50}</td><td className="mono">{((txns/50)*100).toFixed(1)}%</td><td><StatusBadge status={txns>=50?"Confirmed":"Pending"}/></td></tr></tbody></table></div></div>
+      <div className="card" style={{marginBottom:16}}><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody>
+        <tr><td style={{fontWeight:600}}>Revenue</td><td className="mono">{fmt(cR)}</td><td className="mono">{fmt(tR)}</td><td className="mono">{fmt(bR)}</td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(total)}</td><td className="mono">{fmt(target)}</td><td className="mono" style={{color:total>=target?"var(--green)":"var(--red)"}}>{fmt(total-target)}</td><td className="mono">{((total/target)*100).toFixed(1)}%</td><td><StatusBadge status={total>=target?"Confirmed":"Pending"}/></td></tr>
+        {/* FIX BUG-11: use TRANSACTION_TARGET everywhere */}
+        <tr><td style={{fontWeight:600}}>Transactions</td><td className="mono">{cargo.length}</td><td className="mono">{tickets.length}</td><td className="mono">{bookings.length}</td><td className="mono" style={{fontWeight:700}}>{txns}</td><td className="mono">{TRANSACTION_TARGET}</td><td className="mono" style={{color:txns>=TRANSACTION_TARGET?"var(--green)":"var(--red)"}}>{txns-TRANSACTION_TARGET}</td><td className="mono">{((txns/TRANSACTION_TARGET)*100).toFixed(1)}%</td><td><StatusBadge status={txns>=TRANSACTION_TARGET?"Confirmed":"Pending"}/></td></tr>
+      </tbody></table></div></div>
       <div className="card"><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>KPI Scoreboard</div><div className="table-wrap"><table><thead><tr><th>KPI</th><th>Actual</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Rating</th><th>Owner</th><th>Status</th></tr></thead><tbody>{kpis.map(k=>{const pct=k.target>0?k.actual/k.target:0;return(<tr key={k.name}><td style={{fontWeight:600}}>{k.name}</td><td className="mono" style={{color:"var(--accent)"}}>{fmt(k.actual)}</td><td className="mono">{fmt(k.target)}</td><td className="mono" style={{color:k.actual>=k.target?"var(--green)":"var(--red)"}}>{fmt(k.actual-k.target)}</td><td className="mono">{(pct*100).toFixed(1)}%</td><td style={{fontSize:16}}>{pct>=0.9?"★★★":pct>=0.5?"★★☆":"★☆☆"}</td><td style={{color:"var(--muted)",fontSize:12}}>{k.owner}</td><td><StatusBadge status={pct>=1?"Confirmed":pct>=0.5?"Pending":"Cancelled"}/></td></tr>);})}</tbody></table></div></div>
     </div>
   );
@@ -810,7 +977,9 @@ function Reports({ cargo, tickets, bookings }) {
 export default function App() {
   const [session, setSession] = useState(()=>getSession());
   const [page,setPage]        = useState("dashboard");
-  const [sideOpen,setSideOpen]= useState(true);
+  // FIX BUG-01 + BUG-12: separate mobile-open state from desktop-expanded state
+  const [sideExpanded, setSideExpanded] = useState(true);   // desktop: wide vs icon-only
+  const [mobileSideOpen, setMobileSideOpen] = useState(false); // mobile: show vs hide
   const [cargo,setCargo]      = useState([]);
   const [tickets,setTickets]  = useState([]);
   const [bookings,setBookings]= useState([]);
@@ -819,30 +988,52 @@ export default function App() {
   const [toast,setToast]      = useState(null);
   const showToast = useCallback((msg,type="success")=>setToast({msg,type}),[]);
 
+  // FIX BUG-05: listen for silent token refresh events (no page reload needed)
+  useEffect(() => {
+    const handler = (e) => setSession(e.detail);
+    window.addEventListener("pw-session-refreshed", handler);
+    return () => window.removeEventListener("pw-session-refreshed", handler);
+  }, []);
+
   // Auto-refresh token 5 minutes before expiry
   useEffect(() => {
     if (!session?.expiresAt) return;
     const msUntilExpiry = session.expiresAt - Date.now();
-    const refreshIn = msUntilExpiry - 5 * 60 * 1000; // 5 min before expiry
+    const refreshIn = msUntilExpiry - 5 * 60 * 1000;
     if (refreshIn <= 0) { refreshSession(); return; }
     const t = setTimeout(() => refreshSession(), refreshIn);
     return () => clearTimeout(t);
-  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [session]);
 
-  // Role-based permission helper
   const can = (action) => {
     const r = session?.role;
     if (r==="admin")   return true;
     if (r==="manager") return action!=="delete" && action!=="manage_users";
     if (r==="staff")   return action==="view" || action==="create";
-    return action==="view"; // viewer
+    return action==="view";
   };
 
-  const handleLogin = (s) => { setSession(s); };
+  const handleLogin  = (s) => { setSession(s); };
   const handleLogout = async () => {
     if (session?.token) await auth.signOut(session.token).catch(()=>{});
     clearSession(); setSession(null);
   };
+
+  // FIX BUG-01: toggle handler is now context-aware
+  const handleMenuToggle = () => {
+    if (window.innerWidth <= 768) {
+      setMobileSideOpen(p => !p);
+    } else {
+      setSideExpanded(p => !p);
+    }
+  };
+
+  // Close mobile sidebar when resizing to desktop
+  useEffect(() => {
+    const onResize = () => { if (window.innerWidth > 768) setMobileSideOpen(false); };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(()=>{
     if (!session) return;
@@ -853,9 +1044,8 @@ export default function App() {
       sb.select("bookings").then(r=>r.map(fromDB.bookings)),
     ]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);})
     .catch(e=>{setDbError(e.message);setLoading(false);});
-  },[session]); // eslint-disable-line react-hooks/exhaustive-deps
+  },[session]);
 
-  // Show login if not authenticated
   if (!session) return <LoginScreen onLogin={handleLogin}/>;
 
   const isAdmin   = session.role==="admin";
@@ -872,21 +1062,40 @@ export default function App() {
   ];
   const titles={dashboard:"Operations Dashboard",cargo:"Cargo Register",ticketing:"Ticketing",bookings:"Bookings",invoice:"Invoice",reports:"Monthly Reports",users:"User Management"};
 
+  // FIX BUG-01 + BUG-12: compute sidebar class correctly for both mobile and desktop
+  const sidebarClass = [
+    "sidebar",
+    window.innerWidth <= 768
+      ? (mobileSideOpen ? "expanded" : "")
+      : (sideExpanded   ? "expanded" : "collapsed"),
+  ].filter(Boolean).join(" ");
+
+  const showLabels = window.innerWidth <= 768 ? mobileSideOpen : sideExpanded;
+
   return (
     <>
       <style>{CSS}</style>
       <div className="app">
-        <div className={`sidebar-overlay ${sideOpen?"visible":""}`} onClick={()=>setSideOpen(false)}/>
-        <div className={`sidebar ${sideOpen?"open":"collapsed"}`}>
+        {/* FIX BUG-01: overlay only rendered/visible on mobile when sidebar is open */}
+        {mobileSideOpen && (
+          <div className="sidebar-overlay visible" onClick={()=>setMobileSideOpen(false)} style={{display:"block"}}/>
+        )}
+        <div className={sidebarClass}>
           <div className="sidebar-logo">
             <div className="logo-icon">PW</div>
-            {sideOpen&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}
+            {showLabels&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}
           </div>
           <nav className="nav">
-            {sideOpen&&<div className="nav-section">Main Menu</div>}
-            {allNav.map(n=>(<div key={n.id} className={`nav-item ${page===n.id?"active":""}`} onClick={()=>{setPage(n.id);if(window.innerWidth<=768)setSideOpen(false);}}><span className="icon"><Icon name={n.icon} size={18}/></span>{sideOpen&&<span>{n.label}</span>}</div>))}
+            {showLabels&&<div className="nav-section">Main Menu</div>}
+            {allNav.map(n=>(
+              <div key={n.id} className={`nav-item ${page===n.id?"active":""}`}
+                onClick={()=>{setPage(n.id);if(window.innerWidth<=768)setMobileSideOpen(false);}}>
+                <span className="icon"><Icon name={n.icon} size={18}/></span>
+                {showLabels&&<span>{n.label}</span>}
+              </div>
+            ))}
           </nav>
-          {sideOpen&&(
+          {showLabels&&(
             <div className="sidebar-footer">
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"8px 4px",background:"var(--surface2)",borderRadius:8}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:"linear-gradient(135deg,var(--accent),var(--accent2))",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:700,color:"#000",flexShrink:0}}>
@@ -908,7 +1117,7 @@ export default function App() {
         <div className="main">
           <div className="topbar">
             <div className="topbar-left">
-              <button className="btn btn-ghost btn-sm" onClick={()=>setSideOpen(p=>!p)} style={{padding:"6px 8px"}}><Icon name="menu" size={18}/></button>
+              <button className="btn btn-ghost btn-sm" onClick={handleMenuToggle} style={{padding:"6px 8px"}}><Icon name="menu" size={18}/></button>
               <div><div className="page-title">{titles[page]||page}</div><div className="page-sub">Perwaani General Trading &amp; Investment Co. Ltd</div></div>
             </div>
             <div className="topbar-center"><GlobalSearch onNavigate={setPage}/></div>
