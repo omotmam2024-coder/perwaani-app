@@ -140,6 +140,26 @@ function useIsMobile(breakpoint=768) {
   return isMobile;
 }
 
+// ── THEME HOOK ────────────────────────────────────────────────────────────────
+// Reads system preference on first load, persists to localStorage,
+// and applies data-theme attribute to <html> element so CSS variables switch.
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("pw_theme");
+    if (saved === "light" || saved === "dark") return saved;
+    // Default to system preference
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("pw_theme", theme);
+  }, [theme]);
+
+  const toggle = () => setTheme(t => t === "dark" ? "light" : "dark");
+  return [theme, toggle];
+}
+
 
 /* ══════════════════════════════════════════════
    AUTH CSS
@@ -163,6 +183,15 @@ const AUTH_CSS = `
   .auth-error{background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.3);border-radius:8px;padding:10px 14px;font-size:13px;color:#f85149;margin-bottom:16px}
   .auth-footer{text-align:center;margin-top:20px;font-size:12px;color:#8b949e}
   @media(max-width:480px){.auth-card{padding:24px 18px;border-radius:12px}}
+  /* Login screen light mode */
+  [data-theme="light"] .auth-bg{background:#f0f2f5}
+  [data-theme="light"] .auth-card{background:#ffffff;border-color:#d0d7de;box-shadow:0 8px 32px rgba(0,0,0,0.1)}
+  [data-theme="light"] .auth-title{color:#1f2328}
+  [data-theme="light"] .auth-sub{color:#636c76}
+  [data-theme="light"] .auth-label{color:#636c76}
+  [data-theme="light"] .auth-input{background:#f6f8fa;border-color:#d0d7de;color:#1f2328}
+  [data-theme="light"] .auth-input:focus{border-color:#c87800;box-shadow:0 0 0 3px rgba(200,120,0,0.12)}
+  [data-theme="light"] .auth-footer{color:#636c76}
 `;
 
 /* ══════════════════════════════════════════════
@@ -226,6 +255,7 @@ function LoginScreen({ onLogin }) {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState("");
   const [showPw, setShowPw]     = useState(false);
+  const [theme, toggleTheme]    = useTheme();
 
   const submit = async (e) => {
     e && e.preventDefault();
@@ -259,6 +289,15 @@ function LoginScreen({ onLogin }) {
     <>
       <style>{AUTH_CSS}</style>
       <div className="auth-bg">
+        <button
+          onClick={toggleTheme}
+          title={theme==="dark"?"Switch to light mode":"Switch to dark mode"}
+          style={{position:"fixed",top:16,right:16,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"50%",width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#8b949e",transition:"all 0.2s",zIndex:10}}
+          onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.15)";e.currentTarget.style.color="#e6edf3"}}
+          onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.color="#8b949e"}}
+        >
+          {theme==="dark"?<Icon name="sun" size={16}/>:<Icon name="moon" size={16}/>}
+        </button>
         <div className="auth-card">
           <div className="auth-logo">
             <div className="auth-logo-icon">PW</div>
@@ -602,6 +641,8 @@ const Icon = ({ name, size=20 }) => {
     logout:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
     users:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
     shield:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+    sun:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+    moon:<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
   };
   return icons[name] || null;
 };
@@ -612,7 +653,22 @@ const Icon = ({ name, size=20 }) => {
 ══════════════════════════════════════════════ */
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-  :root{--bg:#0d1117;--surface:#161b22;--surface2:#1c2230;--border:#30363d;--accent:#f0a500;--accent2:#e05c00;--green:#3fb950;--blue:#58a6ff;--red:#f85149;--purple:#a371f7;--text:#e6edf3;--muted:#8b949e;--card-shadow:0 4px 24px rgba(0,0,0,0.4)}
+  /* ══ DARK THEME (default) ══ */
+  :root,[data-theme="dark"]{
+    --bg:#0d1117;--surface:#161b22;--surface2:#1c2230;--border:#30363d;
+    --accent:#f0a500;--accent2:#e05c00;--green:#3fb950;--blue:#58a6ff;
+    --red:#f85149;--purple:#a371f7;--text:#e6edf3;--muted:#8b949e;
+    --card-shadow:0 4px 24px rgba(0,0,0,0.4);
+    --toggle-bg:#30363d;--toggle-knob:#e6edf3;--toggle-icon:255,255,255;
+  }
+  /* ══ LIGHT THEME ══ */
+  [data-theme="light"]{
+    --bg:#f0f2f5;--surface:#ffffff;--surface2:#f6f8fa;--border:#d0d7de;
+    --accent:#c87800;--accent2:#a85000;--green:#1a7f37;--blue:#0969da;
+    --red:#cf222e;--purple:#8250df;--text:#1f2328;--muted:#636c76;
+    --card-shadow:0 2px 12px rgba(0,0,0,0.08);
+    --toggle-bg:#d0d7de;--toggle-knob:#1f2328;--toggle-icon:0,0,0;
+  }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);-webkit-text-size-adjust:100%}
   .app{display:flex;min-height:100vh;min-height:100dvh}
@@ -644,6 +700,30 @@ const CSS = `
   .topbar-center{flex:1;max-width:480px;padding:8px 0}
   .topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;padding:10px 0}
   .topbar-date{font-size:12px;color:var(--muted)}
+
+  /* ══ THEME TOGGLE ══ */
+  .theme-toggle{
+    position:relative;width:52px;height:28px;flex-shrink:0;cursor:pointer;
+    background:var(--toggle-bg);border-radius:100px;border:none;
+    transition:background 0.3s ease;padding:0;outline:none;
+  }
+  .theme-toggle:focus-visible{box-shadow:0 0 0 3px rgba(240,165,0,0.4)}
+  .theme-toggle-knob{
+    position:absolute;top:3px;left:3px;width:22px;height:22px;
+    border-radius:50%;background:var(--surface);
+    transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1),background 0.3s;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 1px 4px rgba(0,0,0,0.25);
+  }
+  [data-theme="light"] .theme-toggle-knob{transform:translateX(24px)}
+  .theme-toggle-knob svg{
+    position:absolute;transition:opacity 0.2s,transform 0.3s;
+    color:var(--text);
+  }
+  .theme-toggle-knob .icon-moon{opacity:1;transform:rotate(0deg)}
+  .theme-toggle-knob .icon-sun{opacity:0;transform:rotate(90deg)}
+  [data-theme="light"] .theme-toggle-knob .icon-moon{opacity:0;transform:rotate(-90deg)}
+  [data-theme="light"] .theme-toggle-knob .icon-sun{opacity:1;transform:rotate(0deg)}
   .page-title{font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
   .page-sub{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
@@ -781,6 +861,25 @@ const CSS = `
 
   /* ══ SCROLLBAR ══ */
   ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:10px}
+
+  /* ══ LIGHT MODE ADJUSTMENTS ══ */
+  [data-theme="light"] .card{box-shadow:0 1px 6px rgba(0,0,0,0.07),0 0 0 1px var(--border)}
+  [data-theme="light"] .sidebar{box-shadow:1px 0 0 var(--border)}
+  [data-theme="light"] .topbar{box-shadow:0 1px 0 var(--border)}
+  [data-theme="light"] .search-results{box-shadow:0 8px 24px rgba(0,0,0,0.12)}
+  [data-theme="light"] .modal{box-shadow:0 12px 40px rgba(0,0,0,0.15)}
+  [data-theme="light"] .global-search input{background:#fff}
+  [data-theme="light"] .form-input,[data-theme="light"] .form-select{background:#fff;color:var(--text)}
+  [data-theme="light"] thead th{background:#f6f8fa}
+  [data-theme="light"] .btn-ghost{border-color:var(--border);color:var(--muted)}
+  [data-theme="light"] .btn-ghost:hover{background:var(--surface2);color:var(--text)}
+  [data-theme="light"] .btn-secondary{background:var(--surface2);border-color:var(--border);color:var(--text)}
+  [data-theme="light"] .db-banner{background:linear-gradient(135deg,rgba(9,105,218,0.06),rgba(130,80,223,0.06))}
+  [data-theme="light"] .nav-item.active{background:rgba(200,120,0,0.1);color:var(--accent)}
+  [data-theme="light"] .kpi.gold::before{background:var(--accent);opacity:0.05}
+  [data-theme="light"] tbody tr:hover{background:rgba(0,0,0,0.02)}
+  [data-theme="light"] .toast{box-shadow:0 4px 16px rgba(0,0,0,0.12)}
+  [data-theme="light"] .sidebar.collapsed .nav-item::after{box-shadow:0 2px 8px rgba(0,0,0,0.12)}
 
   /* ══ PRINT ══ */
   @media print{
@@ -1205,7 +1304,8 @@ function Reports({ cargo, tickets, bookings }) {
 export default function App() {
   const [session, setSession] = useState(()=>getSession());
   const [page,setPage]        = useState("dashboard");
-  const isMobile              = useIsMobile(768); // RESPONSIVE FIX: reactive, not raw window.innerWidth
+  const isMobile              = useIsMobile(768);
+  const [theme, toggleTheme]  = useTheme();
   const [sideExpanded, setSideExpanded]   = useState(true);
   const [mobileSideOpen, setMobileSideOpen] = useState(false);
   const [cargo,setCargo]      = useState([]);
@@ -1350,6 +1450,18 @@ export default function App() {
               <span className={`badge ${roleColor}`} style={{display:"flex",alignItems:"center",gap:4}}><Icon name="shield" size={11}/>{session.role}</span>
               <span className={`badge ${dbError?"badge-red":"badge-green"}`}><Icon name={dbError?"alert":"db"} size={12}/>{dbError?"DB Error":"Live"}</span>
               <span className="topbar-date">{new Date().toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"})}</span>
+              {/* ── THEME TOGGLE BUTTON ── */}
+              <button
+                className="theme-toggle"
+                onClick={toggleTheme}
+                title={theme==="dark"?"Switch to light mode":"Switch to dark mode"}
+                aria-label={theme==="dark"?"Switch to light mode":"Switch to dark mode"}
+              >
+                <span className="theme-toggle-knob">
+                  <span className="icon-moon" style={{position:"absolute",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="moon" size={11}/></span>
+                  <span className="icon-sun"  style={{position:"absolute",display:"flex",alignItems:"center",justifyContent:"center"}}><Icon name="sun"  size={11}/></span>
+                </span>
+              </button>
             </div>
           </div>
 
