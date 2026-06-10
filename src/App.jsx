@@ -320,35 +320,105 @@ function UserManagement({ session, toast }) {
     if (!validate()) return;
     setSaving(true);
     try {
+      // ── STEP 1: Sign up via Supabase Auth ────────────────────────────────────
+      // Supabase /signup response shape differs based on whether email
+      // confirmation is ON or OFF in your project settings:
+      //   • Confirmation OFF → { user: { id, email, ... }, session: {...} }
+      //   • Confirmation ON  → { user: null, session: null } (pending confirm)
+      //                     OR top-level { id, email, identities: [...] }
+      // We must handle all three shapes to extract a valid UUID.
       const signUpRes = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: "POST",
         headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY },
-        body: JSON.stringify({ email: form.email.trim(), password: form.password }),
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
+          // data field sets user_metadata — not needed but harmless
+        }),
       });
       const signUpData = await signUpRes.json();
-      if (!signUpRes.ok) throw new Error(signUpData.msg || signUpData.message || signUpData.error_description || "Failed to create user");
-      const newAuthId = signUpData.user?.id || signUpData.id;
-      if (!newAuthId) throw new Error("No user ID returned — user may already exist");
 
+      // Handle hard errors (400/422/500)
+      if (!signUpRes.ok) {
+        const msg = signUpData.msg
+          || signUpData.message
+          || signUpData.error_description
+          || signUpData.error
+          || "Sign-up failed";
+        throw new Error(msg);
+      }
+
+      // Extract auth UUID — try every known response shape
+      const newAuthId =
+        signUpData.user?.id        // confirmation OFF: { user: { id } }
+        || signUpData.id           // some versions: top-level id
+        || signUpData.identities?.[0]?.user_id; // identities array shape
+
+      // If still no ID, email confirmation is ON and the user is pending.
+      // In that case we cannot insert into app_users yet (FK would fail).
+      // Instead we store pending info and show a helpful message.
+      if (!newAuthId) {
+        toast(
+          "⚠ Account pending email confirmation. Disable 'Confirm email' in your Supabase Auth settings for instant activation, or ask the user to confirm before they can log in.",
+          "error"
+        );
+        setSaving(false);
+        return;
+      }
+
+      // ── STEP 2: Check for duplicate auth_id before inserting ─────────────────
+      // If the same email was signed up before but never confirmed, the auth
+      // record may already exist — inserting again would cause a duplicate FK.
+      const checkRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/app_users?auth_id=eq.${newAuthId}&select=id`,
+        { headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${session.token}` } }
+      );
+      const existing = await checkRes.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        throw new Error("A user profile for this email already exists. Use 'Change Role' to update permissions.");
+      }
+
+      // ── STEP 3: Insert app_users profile row ─────────────────────────────────
       const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/app_users`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "apikey": SUPABASE_KEY,
           "Authorization": `Bearer ${session.token}`,
-          "Prefer": "return=representation"
+          "Prefer": "return=representation",
         },
-        body: JSON.stringify({ auth_id: newAuthId, email: form.email.trim(), full_name: form.full_name.trim(), role: form.role }),
+        body: JSON.stringify({
+          auth_id:   newAuthId,
+          email:     form.email.trim(),
+          full_name: form.full_name.trim(),
+          role:      form.role,
+        }),
       });
+
       if (!insertRes.ok) {
-        const err = await insertRes.json();
-        throw new Error(err.message || err.details || "Failed to save user role");
+        const errBody = await insertRes.json();
+        // Parse the most useful part of the Postgres error
+        const detail  = errBody.details  || "";
+        const hint    = errBody.hint     || "";
+        const message = errBody.message  || errBody.msg || "";
+        // Foreign key violation means auth_id doesn't exist in auth.users yet
+        if (message.includes("foreign key") || message.includes("app_users_auth_id_fkey")) {
+          throw new Error(
+            "Foreign key error: the auth account was created but is not yet active. " +
+            "Go to Supabase Dashboard → Authentication → Settings and DISABLE 'Enable email confirmations', then try again."
+          );
+        }
+        throw new Error(detail || hint || message || "Failed to save user profile");
       }
-      toast("User created ✓ — they can now log in","success");
+
+      toast("User created ✓ — they can now log in", "success");
       setShowForm(false);
       setForm({ email:"", full_name:"", password:"", role:"staff" });
+      setErrors({});
       loadUsers();
-    } catch(e) { toast("Error: "+e.message,"error"); }
+    } catch(e) {
+      toast("Error: " + e.message, "error");
+    }
     setSaving(false);
   };
 
@@ -434,24 +504,60 @@ function UserManagement({ session, toast }) {
       )}
       {showForm && (
         <div className="overlay" onClick={e=>e.target===e.currentTarget&&setShowForm(false)}>
-          <div className="modal" style={{maxWidth:480}}>
-            <div className="modal-header"><div className="modal-title">Add New User</div><button className="btn btn-ghost btn-sm" onClick={()=>setShowForm(false)}><Icon name="close" size={16}/></button></div>
+          <div className="modal" style={{maxWidth:500}}>
+            <div className="modal-header">
+              <div className="modal-title"><Icon name="users" size={17}/>Add New User</div>
+              <button className="btn btn-ghost btn-sm" onClick={()=>{setShowForm(false);setErrors({});setForm({email:"",full_name:"",password:"",role:"staff"});}}><Icon name="close" size={16}/></button>
+            </div>
             <div className="modal-body">
+              {/* Supabase requirement notice */}
+              <div style={{background:"rgba(240,165,0,0.07)",border:"1px solid rgba(240,165,0,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:18,fontSize:12,lineHeight:1.7,color:"var(--muted)"}}>
+                <strong style={{color:"var(--accent)"}}>Required Supabase setting:</strong> Go to{" "}
+                <strong style={{color:"var(--text)"}}>Supabase Dashboard &rarr; Authentication &rarr; Settings</strong> and
+                turn <strong style={{color:"var(--red)"}}>OFF</strong> &ldquo;Enable email confirmations&rdquo; so users can log in immediately.
+                Without this, user creation will fail with a foreign key error.
+              </div>
               <div className="form-grid" style={{gridTemplateColumns:"1fr"}}>
-                <div className="form-group"><label className="form-label">Full Name *</label><input className={`form-input${errors.full_name?" error":""}`} value={form.full_name} onChange={e=>set("full_name",e.target.value)} placeholder="John Doe"/>{errors.full_name&&<span className="form-error">{errors.full_name}</span>}</div>
-                <div className="form-group"><label className="form-label">Email *</label><input type="email" className={`form-input${errors.email?" error":""}`} value={form.email} onChange={e=>set("email",e.target.value)} placeholder="user@example.com"/>{errors.email&&<span className="form-error">{errors.email}</span>}</div>
-                <div className="form-group"><label className="form-label">Password *</label><input type="password" className={`form-input${errors.password?" error":""}`} value={form.password} onChange={e=>set("password",e.target.value)} placeholder="Min 6 characters"/>{errors.password&&<span className="form-error">{errors.password}</span>}</div>
-                <div className="form-group"><label className="form-label">Role</label>
+                <div className="form-group">
+                  <label className="form-label">Full Name *</label>
+                  <input className={`form-input${errors.full_name?" error":""}`} value={form.full_name} onChange={e=>set("full_name",e.target.value)} placeholder="e.g. John Doe" autoComplete="off"/>
+                  {errors.full_name&&<span className="form-error">{errors.full_name}</span>}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email Address *</label>
+                  <input type="email" className={`form-input${errors.email?" error":""}`} value={form.email} onChange={e=>set("email",e.target.value)} placeholder="user@example.com" autoComplete="off"/>
+                  {errors.email&&<span className="form-error">{errors.email}</span>}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password *</label>
+                  <input type="password" className={`form-input${errors.password?" error":""}`} value={form.password} onChange={e=>set("password",e.target.value)} placeholder="Minimum 6 characters" autoComplete="new-password"/>
+                  {errors.password&&<span className="form-error">{errors.password}</span>}
+                  {form.password&&form.password.length>=6&&<span style={{fontSize:11,color:"var(--green)",marginTop:2}}>Password strength OK</span>}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Role</label>
                   <select className="form-select" value={form.role} onChange={e=>set("role",e.target.value)}>
-                    <option value="admin">Admin — Full access</option>
-                    <option value="manager">Manager — View, create, edit</option>
-                    <option value="staff">Staff — View and create</option>
-                    <option value="viewer">Viewer — Read only</option>
+                    <option value="admin">Admin - Full access + user management</option>
+                    <option value="manager">Manager - View, create, edit</option>
+                    <option value="staff">Staff - View and create only</option>
+                    <option value="viewer">Viewer - Read only</option>
                   </select>
+                  <span style={{fontSize:11,color:"var(--muted)",marginTop:2}}>
+                    {form.role==="admin"&&"Can delete records and manage all users."}
+                    {form.role==="manager"&&"Cannot delete records or manage users."}
+                    {form.role==="staff"&&"Cannot edit, delete, or manage users."}
+                    {form.role==="viewer"&&"Read-only. Cannot create or modify anything."}
+                  </span>
                 </div>
               </div>
             </div>
-            <div className="modal-footer"><button className="btn btn-secondary" onClick={()=>setShowForm(false)}>Cancel</button><button className="btn btn-primary" onClick={createUser} disabled={saving}>{saving?<span className="spinner"/>:<Icon name="check" size={15}/>}Create User</button></div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={()=>{setShowForm(false);setErrors({});setForm({email:"",full_name:"",password:"",role:"staff"});}}>Cancel</button>
+              <button className="btn btn-primary" onClick={createUser} disabled={saving}>
+                {saving?<span className="spinner"/>:<Icon name="check" size={15}/>}
+                {saving?"Creating...":"Create User"}
+              </button>
+            </div>
           </div>
         </div>
       )}
