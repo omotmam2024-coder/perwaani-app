@@ -1376,7 +1376,7 @@ function Ticketing({ data, setData, toast, can }) {
   const handlePrint=r=>printInNewWindow(buildTicketHTML(r));
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);setErrors({});};
   const [payFilter,setPayFilter]=useState("all");
-  const filtered=data.filter(r=>((r.passengerName||"").toLowerCase().includes(search.toLowerCase())||(r.ticketNo+"").includes(search)||(r.phone||"").includes(search)||(r.from||"").toLowerCase().includes(search.toLowerCase())||(r.to||"").toLowerCase().includes(search.toLowerCase()))&&(payFilter==="all"||calcBal(r.fees,r.amountPaid)>0.0001));
+  const filtered=data.filter(r=>([r.passengerName,r.ticketNo,r.phone,r.from,r.to].some(v=>String(v??"").toLowerCase().includes(search.toLowerCase())))&&(payFilter==="all"||calcBal(r.fees,r.amountPaid)>0.0001));
   const totalFees=data.reduce((s,r)=>s+Number(r.fees||0),0);
   const totalTPaid=data.reduce((s,r)=>s+calcPaid(r.fees,r.amountPaid),0),totalTBal=data.reduce((s,r)=>s+calcBal(r.fees,r.amountPaid),0);
   return (
@@ -1469,7 +1469,7 @@ function Bookings({ data, setData, toast, can }) {
   };
   const openEdit=r=>{setForm(r);setEditing(r.id);setShowForm(true);setErrors({});};
   const [payFilter,setPayFilter]=useState("all");
-  const filtered=data.filter(r=>((r.passengerName||"").toLowerCase().includes(search.toLowerCase())||(r.bookingId||"").includes(search)||(r.phone||"").includes(search)||(r.from||"").toLowerCase().includes(search.toLowerCase())||(r.to||"").toLowerCase().includes(search.toLowerCase()))&&(payFilter==="all"||calcBal(r.total,r.amountPaid)>0.0001));
+  const filtered=data.filter(r=>([r.passengerName,r.bookingId,r.phone,r.from,r.to].some(v=>String(v??"").toLowerCase().includes(search.toLowerCase())))&&(payFilter==="all"||calcBal(r.total,r.amountPaid)>0.0001));
   const totalRev=data.reduce((s,r)=>s+Number(r.total||0),0);
   const totalBPaid=data.reduce((s,r)=>s+calcPaid(r.total,r.amountPaid),0),totalBBal=data.reduce((s,r)=>s+calcBal(r.total,r.amountPaid),0);
   return (
