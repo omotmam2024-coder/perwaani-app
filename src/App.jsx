@@ -1195,7 +1195,7 @@ function GlobalSearch({ onNavigate }) {
 function Dashboard({ cargo, tickets, bookings }) {
   const cRev=cargo.reduce((s,r)=>s+Number(r.amount||0),0),tRev=tickets.reduce((s,r)=>s+Number(r.fees||0),0),bRev=bookings.reduce((s,r)=>s+Number(r.total||0),0);
   const cOut=cargo.reduce((s,r)=>s+calcBal(r.amount,r.amountPaid),0),tOut=tickets.reduce((s,r)=>s+calcBal(r.fees,r.amountPaid),0),bOut=bookings.reduce((s,r)=>s+calcBal(r.total,r.amountPaid),0);
-  const combined=cRev+tRev+bRev,target=20000000,pct=Math.min(100,(combined/target)*100);
+  const combined=tRev+bRev,target=20000000,pct=Math.min(100,(combined/target)*100);
   const payBreak={},itemBreak={};
   cargo.forEach(r=>{const p=r.paymentMethod||"Other";payBreak[p]=(payBreak[p]||0)+Number(r.amount||0);});
   cargo.forEach(r=>{const d=r.description||"Other";itemBreak[d]=(itemBreak[d]||0)+1;});
@@ -1206,7 +1206,7 @@ function Dashboard({ cargo, tickets, bookings }) {
     <div>
       <div className="db-banner"><Icon name="db" size={22}/><div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>Connected to Supabase · Cloud Database</div><div style={{fontSize:11,color:"var(--muted)"}}>All data stored in real-time cloud database — syncs across all devices.</div></div><span className="badge badge-green"><Icon name="check" size={12}/>Live</span></div>
       <div className="grid-4" style={{marginBottom:16}}>
-        <div className="card kpi gold glow"><div className="kpi-icon"><Icon name="money" size={40}/></div><div className="kpi-label">Combined Revenue</div><div className="kpi-val">$ {fmt(combined)}</div><div className="kpi-sub">Cargo + Tickets + Bookings</div></div>
+        <div className="card kpi gold glow"><div className="kpi-icon"><Icon name="money" size={40}/></div><div className="kpi-label">Travel Revenue (USD)</div><div className="kpi-val">$ {fmt(combined)}</div><div className="kpi-sub">Tickets + Bookings</div></div>
         <div className="card kpi green"><div className="kpi-icon"><Icon name="cargo" size={40}/></div><div className="kpi-label">Cargo Revenue</div><div className="kpi-val">SSP {fmt(cRev)}</div><div className="kpi-sub">{cargo.length} shipments</div></div>
         <div className="card kpi blue"><div className="kpi-icon"><Icon name="plane" size={40}/></div><div className="kpi-label">Ticket Revenue</div><div className="kpi-val">$ {fmt(tRev)}</div><div className="kpi-sub">{tickets.length} passengers</div></div>
         <div className="card kpi purple"><div className="kpi-icon"><Icon name="booking" size={40}/></div><div className="kpi-label">Booking Revenue</div><div className="kpi-val">$ {fmt(bRev)}</div><div className="kpi-sub">{bookings.length} bookings</div></div>
