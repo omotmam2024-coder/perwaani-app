@@ -3,13 +3,22 @@ import { useState, useEffect, useCallback, useRef } from "react";
 const SUPABASE_URL = "https://gyxyivbxrheyoisermei.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5eHlpdmJ4cmhleW9pc2VybWVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNTgxNzcsImV4cCI6MjA5NTYzNDE3N30.Tb_ExY6Uua2oVXwE_tl2GpI9phu1nS9RiZlYKOd5n1g";
 
+// Every request to the database carries the logged-in user's own token. The public (anon) key
+// only identifies the project; using it as the bearer would make every write run as "anyone".
 function sbHeaders() {
+  const token = getSession()?.token;
+  if (!token) { clearSession(); window.location.reload(); throw new Error("Your session has ended. Please sign in again."); }
   return {
     "Content-Type": "application/json",
     "apikey": SUPABASE_KEY,
-    "Authorization": `Bearer ${SUPABASE_KEY}`,
+    "Authorization": `Bearer ${token}`,
   };
 }
+
+// PostgREST caps one answer at 1000 rows, so registers are read page by page.
+const PAGE_SIZE = 1000;
+// A search word placed inside an ilike filter: quoted, so commas, brackets and quotes are plain text.
+const likeValue = q => encodeURIComponent(`"*${String(q).replace(/[\\"]/g, "\\$&")}*"`);
 
 const sb = {
   async select(table, search = "") {
@@ -20,18 +29,24 @@ const sb = {
         tickets:  ["passenger_name"],
         bookings: ["passenger_name"],
       }[table] || [];
-      if (cols.length) url += `&or=(${cols.map(c=>`${c}.ilike.*${encodeURIComponent(search)}*`).join(",")})`;
+      if (cols.length) url += `&or=(${cols.map(c=>`${c}.ilike.${likeValue(search)}`).join(",")})`;
     }
     // FIX BUG-10: don't fall back to anon key — force re-auth if token is missing
     const token = getSession()?.token;
     if (!token) { clearSession(); window.location.reload(); return []; }
-    const res = await fetch(url, { headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}` } });
-    if (!res.ok) {
-      const errText = await res.text();
-      if (errText.includes("JWT expired") || errText.includes("PGRST303")) { clearSession(); window.location.reload(); }
-      throw new Error(errText);
+    const rows = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const res = await fetch(url, { headers: { "Content-Type":"application/json", "apikey": SUPABASE_KEY, "Authorization": `Bearer ${token}`, "Range-Unit": "items", "Range": `${from}-${from + PAGE_SIZE - 1}` } });
+      if (res.status === 416 && from > 0) return rows; // no rows past the last page
+      if (!res.ok) {
+        const errText = await res.text();
+        if (errText.includes("JWT expired") || errText.includes("PGRST303")) { clearSession(); window.location.reload(); }
+        throw new Error(errText);
+      }
+      const page = await res.json();
+      rows.push(...page);
+      if (page.length < PAGE_SIZE) return rows;
     }
-    return res.json();
   },
   async insert(table, row) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, { method:"POST", headers:{...sbHeaders(),"Prefer":"return=representation"}, body:JSON.stringify(row) });
@@ -39,13 +54,17 @@ const sb = {
     return res.json();
   },
   async update(table, id, row) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, { method:"PATCH", headers:{...sbHeaders(),"Prefer":"return=representation"}, body:JSON.stringify(row) });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, { method:"PATCH", headers:{...sbHeaders(),"Prefer":"return=representation"}, body:JSON.stringify(row) });
     if (!res.ok) { const e=await res.text(); if(e.includes("JWT expired")||e.includes("PGRST303")){clearSession();window.location.reload();} throw new Error(e); }
-    return res.json();
+    const rows = await res.json();
+    if (Array.isArray(rows) && rows.length === 0) throw new Error("Nothing was changed: the record no longer exists or you are not allowed to edit it.");
+    return rows;
   },
   async remove(table, id) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, { method:"DELETE", headers:sbHeaders() });
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, { method:"DELETE", headers:{...sbHeaders(),"Prefer":"return=representation"} });
     if (!res.ok) { const e=await res.text(); if(e.includes("JWT expired")||e.includes("PGRST303")){clearSession();window.location.reload();} throw new Error(e); }
+    const rows = await res.json();
+    if (Array.isArray(rows) && rows.length === 0) throw new Error("Nothing was deleted: the record no longer exists or you are not allowed to delete it.");
   },
 };
 
@@ -127,7 +146,7 @@ async function saveWithPaid(method,table,id,payload,toast){
   try{return method==="insert"?await sb.insert(table,payload):await sb.update(table,id,payload);}
   catch(e){if(String(e.message||"").includes("amount_paid")){const {amount_paid,...rest}=payload;if(toast)toast("Saved — run the amount_paid migration to store partial payments","info");return method==="insert"?await sb.insert(table,rest):await sb.update(table,id,rest);}throw e;}
 }
-const today = () => new Date().toISOString().slice(0,10);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; };
 // FIX BUG-04: uid() is now the canonical ID generator for all records
 const uid   = p  => `${p}-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
@@ -392,8 +411,15 @@ function LoginScreen({ onLogin }) {
         if (Array.isArray(users) && users.length > 0) {
           role     = users[0].role     || "viewer";
           fullName = users[0].full_name || session.user.email;
+        } else if (res.ok && Array.isArray(users)) {
+          // The login exists but the staff profile was deleted: access has been withdrawn.
+          auth.signOut(session.access_token).catch(()=>{});
+          throw new Error("Your access has been removed. Contact your administrator.");
         }
-      } catch (_) { /* keep defaults */ }
+      } catch (err) {
+        if (String(err.message).startsWith("Your access has been removed")) throw err;
+        /* any other failure: keep the read-only defaults */
+      }
       const expiresAt = Date.now() + ((session.expires_in || 3600) * 1000);
       const s = { token: session.access_token, refreshToken: session.refresh_token, userId: session.user.id, email: session.user.email, fullName, role, expiresAt };
       saveSession(s);
@@ -470,8 +496,10 @@ function UserManagement({ session, toast }) {
       const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?select=*&order=created_at.desc`, {
         headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${session.token}` },
       });
-      setUsers(await res.json());
-    } catch(e) { toast("Failed to load users","error"); }
+      const list = await res.json();
+      if (!res.ok || !Array.isArray(list)) throw new Error(list?.message || "not allowed");
+      setUsers(list);
+    } catch(e) { setUsers([]); toast("Failed to load users: " + e.message,"error"); }
     setLoading(false);
   }, [session.token]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -598,11 +626,13 @@ function UserManagement({ session, toast }) {
 
   const changeRole = async (userId, newRole) => {
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}` },
+        headers: { "Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`,"Prefer":"return=representation" },
         body: JSON.stringify({ role: newRole }),
       });
+      if (!res.ok) throw new Error((await res.json().catch(()=>null))?.message || "not allowed");
+      if ((await res.json()).length === 0) throw new Error("not allowed or user not found");
       setUsers(u => u.map(x => x.id===userId ? {...x, role:newRole} : x));
       toast("Role updated ✓","success");
     } catch(e) { toast("Failed: "+e.message,"error"); }
@@ -618,9 +648,11 @@ function UserManagement({ session, toast }) {
     const u = confirmDelete;
     setConfirmDelete(null);
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${u.id}`, {
-        method: "DELETE", headers: {"apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`},
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${u.id}`, {
+        method: "DELETE", headers: {"apikey":SUPABASE_KEY,"Authorization":`Bearer ${session.token}`,"Prefer":"return=representation"},
       });
+      if (!res.ok) throw new Error((await res.json().catch(()=>null))?.message || "not allowed");
+      if ((await res.json()).length === 0) throw new Error("not allowed or user not found");
       // FIX BUG-08: deletions are successful operations — use "success" not "error"
       toast("User deleted","success");
       loadUsers();
@@ -1162,18 +1194,21 @@ function GlobalSearch({ onNavigate }) {
   useEffect(()=>{
     if(!dq.trim()){setResults(null);setOpen(false);return;}
     setLoading(true);
+    let stale=false;
     const q=dq.trim();
     const searchTable=(table,mapper)=>{
       const cols={cargo:["sender_name","receiver_name"],tickets:["passenger_name"],bookings:["passenger_name"]}[table];
-      const filter=cols.map(c=>`${c}.ilike.*${encodeURIComponent(q)}*`).join(",");
+      const filter=cols.map(c=>`${c}.ilike.${likeValue(q)}`).join(",");
       const url=`${SUPABASE_URL}/rest/v1/${table}?order=created_at.desc&or=(${filter})`;
-      const token=getSession()?.token||SUPABASE_KEY;
+      const token=getSession()?.token;
+      if(!token) return Promise.resolve([]);
       const headers={"Content-Type":"application/json","apikey":SUPABASE_KEY,"Authorization":`Bearer ${token}`};
       return fetch(url,{headers}).then(r=>r.ok?r.json():[]).then(d=>Array.isArray(d)?d.map(mapper):[]).catch(()=>[]);
     };
     Promise.all([searchTable("cargo",fromDB.cargo),searchTable("tickets",fromDB.tickets),searchTable("bookings",fromDB.bookings)])
-      .then(([c,t,b])=>{setResults({cargo:c.slice(0,5),tickets:t.slice(0,5),bookings:b.slice(0,5)});setOpen(true);})
-      .finally(()=>setLoading(false));
+      .then(([c,t,b])=>{if(stale)return;setResults({cargo:c.slice(0,5),tickets:t.slice(0,5),bookings:b.slice(0,5)});setOpen(true);})
+      .finally(()=>{if(!stale)setLoading(false);});
+    return()=>{stale=true;};
   },[dq]);
   useEffect(()=>{const h=e=>{if(wrapRef.current&&!wrapRef.current.contains(e.target))setOpen(false);};document.addEventListener("mousedown",h);return()=>document.removeEventListener("mousedown",h);},[]);
   const total=results?results.cargo.length+results.tickets.length+results.bookings.length:0;
@@ -1425,7 +1460,7 @@ function Bookings({ data, setData, toast, can }) {
       ["luggageKg",     () => V.nonNegNum(form.luggageKg)],
     ]);
     // Departure date must not be in the past
-    if (form.departureDate) {
+    if (form.departureDate && !editing) {
       const past = V.dateNotPast(form.departureDate);
       if (past) e.departureDate = past;
     }
@@ -1549,24 +1584,28 @@ function Invoice({ cargo, tickets, bookings, toast }) {
   );
 }
 
-function Reports({ cargo, tickets, bookings }) {
+function Reports({ cargo: allCargo, tickets: allTickets, bookings: allBookings }) {
+  // A monthly report covers one month (this one to start with); "" shows everything.
+  const [month,setMonth]=useState(today().slice(0,7));
+  const inMonth=d=>!month||String(d||"").slice(0,7)===month;
+  const cargo=allCargo.filter(r=>inMonth(r.receivingDate)),tickets=allTickets.filter(r=>inMonth(r.date)),bookings=allBookings.filter(r=>inMonth(r.bookingDate));
   // FIX BUG-11: single source of truth for transaction target
   const TRANSACTION_TARGET = 50;
 
   const cR=cargo.reduce((s,r)=>s+Number(r.amount||0),0),tR=tickets.reduce((s,r)=>s+Number(r.fees||0),0),bR=bookings.reduce((s,r)=>s+Number(r.total||0),0);
-  const total=cR+tR+bR,txns=cargo.length+tickets.length+bookings.length,target=20000000;
+  const total=tR+bR,txns=cargo.length+tickets.length+bookings.length,target=20000000; // total = travel only: cargo is SSP, tickets and bookings are $, and they cannot be added
   const kpis=[
     {name:"Cargo Revenue (SSP)",actual:cR,target:15000000,owner:"Operations"},
     {name:"Ticket Revenue ($)",actual:tR,target:5000000,owner:"Ticketing"},
     {name:"Booking Revenue ($)",actual:bR,target:3000000,owner:"Booking"},
     // FIX BUG-11: use TRANSACTION_TARGET constant
     {name:"Total Transactions",actual:txns,target:TRANSACTION_TARGET,owner:"All Depts"},
-    {name:"Combined Revenue",actual:total,target,owner:"Finance"},
+    {name:"Travel Revenue ($)",actual:total,target,owner:"Finance"},
   ];
   return (
     <div>
-      <div className="section-header"><div><div className="section-title">Monthly Operations Report</div><div style={{fontSize:12,color:"var(--muted)"}}>Generated {new Date().toLocaleDateString()}</div></div><div className="section-actions"><button className="btn btn-secondary" onClick={()=>window.print()}><Icon name="print" size={15}/>Print</button></div></div>
-      <div className="card" style={{marginBottom:16}}><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo</th><th>Ticketing</th><th>Booking</th><th>Total</th><th>Target</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody>
+      <div className="section-header"><div><div className="section-title">Monthly Operations Report</div><div style={{fontSize:12,color:"var(--muted)"}}>{month?new Date(month+"-01T00:00:00").toLocaleDateString("en-GB",{month:"long",year:"numeric"}):"All dates"} · generated {new Date().toLocaleDateString()}</div></div><div className="section-actions"><input type="month" className="form-input" value={month} onChange={e=>setMonth(e.target.value)} title="Report month" style={{width:170}}/><button className="btn btn-ghost" onClick={()=>setMonth("")}>All dates</button><button className="btn btn-secondary" onClick={()=>window.print()}><Icon name="print" size={15}/>Print</button></div></div>
+      <div className="card" style={{marginBottom:16}}><div style={{fontWeight:700,marginBottom:12,fontSize:14}}>Revenue Summary</div><div className="table-wrap"><table><thead><tr><th>Metric</th><th>Cargo (SSP)</th><th>Ticketing ($)</th><th>Booking ($)</th><th>Total travel ($)</th><th>Target ($)</th><th>Variance</th><th>% Achieved</th><th>Status</th></tr></thead><tbody>
         <tr><td style={{fontWeight:600}}>Revenue</td><td className="mono">{fmt(cR)}</td><td className="mono">{fmt(tR)}</td><td className="mono">{fmt(bR)}</td><td className="mono" style={{color:"var(--accent)",fontWeight:700}}>{fmt(total)}</td><td className="mono">{fmt(target)}</td><td className="mono" style={{color:total>=target?"var(--green)":"var(--red)"}}>{fmt(total-target)}</td><td className="mono">{((total/target)*100).toFixed(1)}%</td><td><StatusBadge status={total>=target?"Confirmed":"Pending"}/></td></tr>
         {/* FIX BUG-11: use TRANSACTION_TARGET everywhere */}
         <tr><td style={{fontWeight:600}}>Transactions</td><td className="mono">{cargo.length}</td><td className="mono">{tickets.length}</td><td className="mono">{bookings.length}</td><td className="mono" style={{fontWeight:700}}>{txns}</td><td className="mono">{TRANSACTION_TARGET}</td><td className="mono" style={{color:txns>=TRANSACTION_TARGET?"var(--green)":"var(--red)"}}>{txns-TRANSACTION_TARGET}</td><td className="mono">{((txns/TRANSACTION_TARGET)*100).toFixed(1)}%</td><td><StatusBadge status={txns>=TRANSACTION_TARGET?"Confirmed":"Pending"}/></td></tr>
@@ -1645,7 +1684,9 @@ export default function App() {
       sb.select("bookings").then(r=>r.map(fromDB.bookings)),
     ]).then(([c,t,b])=>{setCargo(c);setTickets(t);setBookings(b);setLoading(false);})
     .catch(e=>{setDbError(e.message);setLoading(false);});
-  },[session]);
+    // Only a different person logging in reloads the data; a silent token refresh must not
+    // (it would blank the page and throw away a form that is half filled in).
+  },[session?.userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!session) return <LoginScreen onLogin={handleLogin}/>;
 
