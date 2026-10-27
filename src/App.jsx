@@ -265,7 +265,7 @@ const AUTH_CSS = `
   .auth-bg{min-height:100vh;background:#0d1117;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Sora',sans-serif}
   .auth-card{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:36px 32px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,0.5)}
   .auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
-  .auth-logo-icon{width:44px;height:44px;background:linear-gradient(135deg,#f0a500,#e05c00);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;color:#000}
+  .auth-logo-icon{width:52px;height:52px;background:#fff;border-radius:12px;padding:4px;object-fit:contain}
   .auth-logo-name{font-size:20px;font-weight:800;color:#f0a500}
   .auth-logo-sub{font-size:11px;color:#8b949e}
   .auth-title{font-size:22px;font-weight:700;color:#e6edf3;margin-bottom:6px}
@@ -413,7 +413,7 @@ function LoginScreen({ onLogin }) {
         </button>
         <div className="auth-card">
           <div className="auth-logo">
-            <div className="auth-logo-icon">PW</div>
+            <img className="auth-logo-icon" src={`${process.env.PUBLIC_URL}/logo.png`} alt="Perwaani" />
             <div><div className="auth-logo-name">PERWAANI</div><div className="auth-logo-sub">General Trading &amp; Investment Co. Ltd</div></div>
           </div>
           <div className="auth-title">Welcome back</div>
@@ -796,7 +796,7 @@ const CSS = `
   .sidebar.expanded{width:240px;min-width:240px}
   .sidebar.collapsed{width:64px;min-width:64px;overflow:hidden}
   .sidebar-logo{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;min-height:60px}
-  .logo-icon{width:36px;height:36px;min-width:36px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#000;flex-shrink:0}
+  .logo-icon{width:40px;height:40px;min-width:40px;background:#fff;border-radius:10px;padding:3px;object-fit:contain;flex-shrink:0}
   .logo-title{font-weight:700;font-size:13px;color:var(--accent);white-space:nowrap;overflow:hidden}
   .logo-sub{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden}
   .nav{padding:10px 8px;flex:1;overflow-y:auto}
@@ -1674,7 +1674,7 @@ export default function App() {
         <div className={`sidebar-overlay${mobileSideOpen?" visible":""}`} onClick={()=>setMobileSideOpen(false)}/>
         <div className={sidebarClass}>
           <div className="sidebar-logo">
-            <div className="logo-icon">PW</div>
+            <img className="logo-icon" src={`${process.env.PUBLIC_URL}/logo.png`} alt="Perwaani" />
             {showLabels&&<div><div className="logo-title">Perwaani</div><div className="logo-sub">Trading &amp; Investment Co.</div></div>}
           </div>
           <nav className="nav">
